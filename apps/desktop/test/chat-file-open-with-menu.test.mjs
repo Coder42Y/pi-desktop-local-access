@@ -48,6 +48,7 @@ const calls = {
   files: [],
   urls: [],
   defaultBrowsers: [],
+  revealed: [],
   toasts: [],
   resolved: [],
   menus: [],
@@ -76,6 +77,7 @@ const useAppStore = Object.assign(
 
 let nextMatch = null;
 let clipboardFails = false;
+let revealFails = false;
 const copied = [];
 
 /*
@@ -111,6 +113,10 @@ const previewTarget = loadModule("../src/hooks/use-preview-target.ts", {
       listPluginViews: async () => state.pluginViews,
       fsOpen: async (path, mimeType, sessionId) =>
         calls.defaultBrowsers.push([path, mimeType, sessionId]),
+      fsReveal: async (path, sessionId) => {
+        if (revealFails) throw new Error("native reveal refused");
+        calls.revealed.push([path, sessionId]);
+      },
       fsResolveRef: async (ref) => {
         calls.resolved.push(ref);
         return { match: nextMatch };
@@ -168,6 +174,7 @@ function reset(match) {
   Object.values(calls).forEach((list) => list.splice(0, list.length));
   nextMatch = match;
   clipboardFails = false;
+  revealFails = false;
 }
 
 /** The match the main process reports for a file of the project's main folder. */
@@ -211,6 +218,7 @@ test("the HTML menu exposes three open destinations as one submenu", () => {
   const menu = calls.menus[0].items;
   assert.deepEqual(menu.map((item) => item.id), [
     "open-with",
+    "reveal-in-folder",
     "copy-full-path",
     "copy-relative-path",
   ]);
@@ -223,7 +231,7 @@ test("the HTML menu exposes three open destinations as one submenu", () => {
       ["open-with-default-browser", "chat.openWithDefaultBrowser:"],
     ],
   );
-  assert.equal(menu.some((item) => item.id === "reveal-in-folder"), false);
+  assert.equal(menu.find((item) => item.id === "reveal-in-folder").label, "panel.files.reveal:");
 });
 
 test("non-HTML references keep copy actions without an open-with submenu", () => {
@@ -236,6 +244,7 @@ test("non-HTML references keep copy actions without an open-with submenu", () =>
   renderToStaticMarkup(React.createElement(Harness));
   openFileMenu({}, { path: "src/dir/a.ts" });
   assert.deepEqual(calls.menus[0].items.map((item) => item.id), [
+    "reveal-in-folder",
     "copy-full-path",
     "copy-relative-path",
   ]);
@@ -410,7 +419,6 @@ test("HTTP URLs keep their own menu instead of the file open submenu", () => {
   // The submenu only recognizes HTML paths, and an HTTP link keeps its own
   // external/work-panel/copy menu.
   assert.match(menu, /isHtmlFilePath\(path\)/);
-  assert.doesNotMatch(menu, /useRevealChatFileRef|reveal-in-folder/);
   assert.ok(markdown.includes('if (!/^https?:\\/\\//i.test(href)) {'));
 });
 
@@ -441,4 +449,86 @@ test("remote workspace references retain copy actions but never offer local open
   renderToStaticMarkup(React.createElement(Harness));
   assert.deepEqual(items.map(item => item.id), ["copy-full-path", "copy-relative-path"]);
   state.sessions = before;
+});
+
+function selectReveal(path, baseDir) {
+  let items;
+  function Harness() { items = useChatFileMenuItems()({ path, baseDir }); return null; }
+  renderToStaticMarkup(React.createElement(Harness));
+  const item = items.find((entry) => entry.id === "reveal-in-folder");
+  assert.ok(item, "local file references offer native folder reveal");
+  item.onSelect();
+}
+
+test("Finder reveal resolves shorthand and uses the absolute path and owning session", async () => {
+  reset(projectMatch());
+  selectReveal("a.ts");
+  await flush();
+  assert.deepEqual(calls.resolved, ["a.ts"]);
+  assert.deepEqual(calls.revealed, [["C:/project/src/dir/a.ts", "session-1"]]);
+  assert.deepEqual(calls.files, []);
+  assert.deepEqual(calls.tabs, []);
+});
+
+test("Finder reveal supports an external installer path with spaces", async () => {
+  const path = "/Users/test/Downloads/PI Desktop custom.dmg";
+  reset({ root: "workspace", relativePath: "Users/test/Downloads/PI Desktop custom.dmg", absolutePath: path, matchedBy: "exact-absolute" });
+  selectReveal(path);
+  await flush();
+  assert.deepEqual(calls.revealed, [[path, "session-1"]]);
+});
+
+test("Finder reveal forwards a markdown base directory through file resolution", async () => {
+  reset(projectMatch());
+  selectReveal("./a.ts", "C:/project/src/dir");
+  await flush();
+  assert.deepEqual(calls.resolved, ["C:/project/src/dir/a.ts"]);
+  assert.deepEqual(calls.revealed, [["C:/project/src/dir/a.ts", "session-1"]]);
+});
+
+test("an unresolved reference reports missing instead of revealing a different file", async () => {
+  reset(null);
+  selectReveal("missing.dmg");
+  await flush();
+  assert.deepEqual(calls.revealed, []);
+  assert.deepEqual(calls.toasts.map(([message]) => message), ["chat.fileRefMissing:missing.dmg"]);
+});
+
+test("a failed native reveal reports the failure without opening another surface", async () => {
+  reset(projectMatch());
+  revealFails = true;
+  selectReveal("a.ts");
+  await flush();
+  assert.deepEqual(calls.revealed, []);
+  assert.deepEqual(calls.toasts.map(([message]) => message), ["chat.fileManagerOpenFailed:"]);
+  assert.deepEqual(calls.files, []);
+  assert.deepEqual(calls.tabs, []);
+});
+
+test("switching the active session cancels an outstanding Finder reveal", async () => {
+  reset(projectMatch());
+  const before = state.activeSessionId;
+  try {
+    selectReveal("a.ts");
+    state.activeSessionId = "another-session";
+    await flush();
+    assert.deepEqual(calls.revealed, []);
+  } finally {
+    state.activeSessionId = before;
+  }
+});
+
+test("remote workspace destinations never invoke local Finder reveal", async () => {
+  reset(projectMatch());
+  const before = state.workspace;
+  try {
+    state.workspace = { ...before, remote: { hostKey: "ssh", path: "/work/app" } };
+    await openWithDestination("a.ts", "reveal-in-folder");
+    assert.deepEqual(calls.revealed, []);
+    assert.deepEqual(calls.files, []);
+    assert.deepEqual(calls.tabs, []);
+    assert.deepEqual(calls.toasts.map(([message]) => message), ["chat.fileManagerOpenFailed:"]);
+  } finally {
+    state.workspace = before;
+  }
 });

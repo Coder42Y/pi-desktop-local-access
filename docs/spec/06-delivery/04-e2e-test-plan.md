@@ -19506,3 +19506,24 @@ their separate platform acceptance.
 - **Native acceptance**: After installing the custom package, click an external
   `.eml` link and check the host preview, then use OS open/reveal. This remains
   pending until a package is built and installed.
+
+### E2E-CHAT-FINDER-REVEAL: Reveal a referenced file from its context menu
+
+- **Steps**: Right-click a local transcript file link, including a non-HTML
+  external installer whose path contains spaces. Select Reveal in Finder. Repeat
+  with a shorthand, a markdown dot-relative reference, a missing file, a native
+  reveal failure, and a session switch while resolution is pending. Check HTML
+  menus retain their Open with submenu and copy actions. Inspect a remote file's
+  menu and an HTTP link's menu.
+- **Expected**: Local file menus include the existing localized folder-reveal
+  label and shared folder icon. Selecting it resolves the actual file before
+  sending its absolute path and owner session ID to `fsReveal`. No file preview,
+  browser, plugin or default app opens. Missing and native-failure cases report
+  existing localized errors. A stale view does nothing. Remote file menus do
+  not offer local reveal and remote-workspace reveal requests are refused.
+  Existing HTTP-link menus are unchanged.
+- **Automation**: `node --test test/chat-file-open-with-menu.test.mjs` from
+  `apps/desktop` executes the real menu and opening hooks with recorded native
+  API calls. `local-file-access.test.mjs` separately verifies the real reveal
+  IPC handler, including external files and remote denials. Native Finder window
+  clicking is not performed by these fixtures.
