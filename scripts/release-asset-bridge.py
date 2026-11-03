@@ -12,6 +12,11 @@ MANIFEST_NAME = "UPLOAD-MANIFEST.json"
 MAX_PART_SIZE = 4 * 1024 * 1024
 
 
+def is_incomplete_asset(asset):
+    # GitHub may set the announced Content-Length before an upload finishes.
+    return bool(asset) and asset.get("state") == "starter"
+
+
 def valid_hash(value):
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
@@ -142,7 +147,7 @@ def run_bridge(repo, tag):
         for item, path in zip(files, restored):
             current = list_assets(repo, release_id)
             existing = current.get(item["name"])
-            if existing and existing.get("state") == "starter" and existing.get("size") == 0:
+            if is_incomplete_asset(existing):
                 subprocess.run(["gh", "api", "-X", "DELETE", f"repos/{repo}/releases/assets/{int(existing['id'])}"], check=True)
                 existing = None
             if not existing:

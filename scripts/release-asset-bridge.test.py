@@ -103,6 +103,13 @@ class ReleaseAssetBridgeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.assemble()
 
+    def test_incomplete_starter_may_have_the_full_announced_size(self):
+        self.assertTrue(self.bridge.is_incomplete_asset({"state": "starter", "size": 4194304, "digest": None}))
+
+    def test_uploaded_assets_are_never_classified_as_incomplete(self):
+        self.assertFalse(self.bridge.is_incomplete_asset({"state": "uploaded", "size": 4194304, "digest": "sha256:" + "a" * 64}))
+        self.assertFalse(self.bridge.is_incomplete_asset({"state": "uploaded", "size": 0, "digest": None}))
+
 
 if __name__ == "__main__":
     unittest.main()
