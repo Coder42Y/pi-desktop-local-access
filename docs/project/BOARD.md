@@ -5,6 +5,10 @@
 > Current delivery status lives in `packages/shared/src/changelog.ts` and the
 > repository's GitHub Issues.
 
+Customized-build planning: see [Next Iteration](NEXT-ITERATION.md) for queued
+work on custom update delivery and SSH remote-session experience. These entries
+are not started and do not change the historical milestone statuses below.
+
 GitHub Projects requires additional token scopes (`project`).
 Until that is enabled, track delivery with:
 
