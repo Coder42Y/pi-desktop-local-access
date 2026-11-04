@@ -1,0 +1,16 @@
+{
+  "slug": "ssh-external-file-preview",
+  "verdict": "pass",
+  "critical_count": 0,
+  "informational_count": 1,
+  "critical": [],
+  "informational": [
+    {
+      "severity": "P2",
+      "finding": "Root preview had no return-to-files action",
+      "resolved": true,
+      "verification": "Failing browser reproduction, localized return action, expanded browser regression passed"
+    }
+  ],
+  "summary": "Single review finding fixed and retested; native deployment remains unverified."
+}

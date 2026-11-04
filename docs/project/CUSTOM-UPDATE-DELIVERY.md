@@ -25,6 +25,14 @@ No session, workspace, database, plugin or remote-access permission changes.
 Workspace/host protocol version remains 0.21.0; electron-builder stamps the app
 package with `build.extraMetadata.version`, currently `0.21.0-local.2`.
 
+## Additional unreleased candidate: SSH external file preview
+
+The SSH preview candidate allows owner-initiated absolute project-external file
+viewing in remote workspaces and legacy sessions, without expanding tools,
+plugins or discovery. It requires matching updated Desktop and pi-host bundles;
+no live Host is changed by this source work. Verification and native-deployment
+limits are tracked in [SSH preview acceptance](../Process/ssh-external-file-preview/acceptance.md).
+
 ## Build and publication checklist (macOS required)
 
 1. Use the candidate worktree on a native Mac with Node >=22.19, the pinned pnpm

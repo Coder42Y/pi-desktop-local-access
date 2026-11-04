@@ -1,5 +1,5 @@
 import { api } from "../../lib/api";
-import { isRemoteSession } from "../../lib/remote-session-safety";
+import { canReadFilePreviews, isRemoteSession } from "../../lib/remote-session-safety";
 import {
   activateWorkPanelTabState,
   browserPluginTab,
@@ -166,7 +166,9 @@ export function createWorkPanelSlice({
 
   openWorkPanelTabForSession: (sessionId, tab) => {
     if (!sessionId) return;
-    if (isRemoteSession(get().sessions.find((session) => session.id === sessionId)) || sessionId.startsWith("remote:")) return;
+    const owner = get().sessions.find((session) => session.id === sessionId);
+    if ((isRemoteSession(owner) || sessionId.startsWith("remote:"))
+      && (tab.kind !== "file" || !canReadFilePreviews(owner ?? { id: sessionId }))) return;
     set((state) => {
       const affectsVisibleSession =
         state.activeSessionId === sessionId &&

@@ -16,7 +16,7 @@ import {
   RacpEventEnvelopeSchema,
   RacpInitializeResultSchema,
   RacpSessionSnapshotSchema,
-  WorkspaceFilesRequestSchema,
+  WorkspaceFilesRequestSchema, WorkspacePreviewRequestSchema,
   WorkspacePluginFilesRequestSchema,
   WorkspacePluginFilesResultSchema,
   allowedDecisionsAreCoherent,
@@ -392,4 +392,13 @@ it("keeps the plugin file contract closed and requires real preview metadata", (
   expect(Value.Check(WorkspacePluginFilesResultSchema, { kind: "text", content: "ok", size: 2, mtimeMs: 123 })).toBe(true);
   expect(Value.Check(WorkspacePluginFilesResultSchema, { kind: "text", size: 2, mtimeMs: 123 })).toBe(false);
   expect(Value.Check(WorkspacePluginFilesResultSchema, { kind: "image", dataUrl: "https://untrusted/image", size: 2, mtimeMs: 123 })).toBe(false);
+});
+
+it("session previews are additive, owner-only and cannot become tool or browse requests", () => {
+  const input = { sessionId: "s1", operation: "read", ref: "/outside/file.md" };
+  expect(Value.Check(WorkspacePreviewRequestSchema, input)).toBe(true);
+  expect(Value.Check(WorkspacePreviewRequestSchema, { ...input, operation: "write" })).toBe(false);
+  expect(Value.Check(WorkspacePreviewRequestSchema, { ...input, path: "/" })).toBe(false);
+  expect(RACP_OPERATIONS["workspace/preview"].role).toBe("owner");
+  expect(RACP_OPERATIONS["workspace/read"].role).toBe("viewer");
 });

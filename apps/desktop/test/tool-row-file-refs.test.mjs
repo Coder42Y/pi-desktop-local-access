@@ -4,7 +4,7 @@ import test from "node:test";
 import * as React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import ts from "typescript";
-import { isRemoteSession, safeSessionSummary, sessionAllows } from "../src/lib/remote-session-safety.ts";
+import { canReadFilePreviews, isRemoteSession, safeSessionSummary, sessionAllows } from "../src/lib/remote-session-safety.ts";
 
 /*
  * The opener a tool row's summary and a tool result's file/match list call.
@@ -116,8 +116,12 @@ const { useOpenPreviewTarget } = loadModule("../src/hooks/use-preview-target.ts"
   }),
   "../lib/open-http-url": { openHttpUrl: (...args) => calls.urls.push(args) },
   "../lib/work-panel-tabs": workPanelTabs,
-  "./use-chat-session-capability": { useChatSessionCapability: () => true },
-  "../lib/remote-session-safety": { isRemoteSession, safeSessionSummary, sessionAllows },
+  "./use-chat-session-capability": loadModule("../src/hooks/use-chat-session-capability.ts", {
+    "../lib/remote-session-safety": { canReadFilePreviews, isRemoteSession, safeSessionSummary, sessionAllows },
+    "../plugins/renderer-slots/use-slots": { useSlotSessionId: () => "" },
+    "../stores/app-store": { useAppStore },
+  }),
+  "../lib/remote-session-safety": { canReadFilePreviews, isRemoteSession, safeSessionSummary, sessionAllows },
   "../plugins/renderer-slots/use-slots": { useSlotSessionId: () => "" },
 });
 
