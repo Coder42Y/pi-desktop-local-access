@@ -17,7 +17,7 @@ test("compact SSH status retains real paste controls without a second settled te
     import React from 'react';
     import { createRoot } from 'react-dom/client';
     import { onLoad, onUnload } from ${JSON.stringify(entry)};
-    window.mode = 'done'; let job;
+    window.mode = 'done'; window.configurationKey='config-a'; let job;
     const editor = document.querySelector('.composer-input');
     onLoad({
       ui: { injectStyle(css) { const style=document.createElement('style');style.textContent=css;document.head.append(style); },
@@ -29,11 +29,11 @@ test("compact SSH status retains real paste controls without a second settled te
         const {method,args={}}=payload;
         if(method==='context') {
           if(window.mode==='context-error')throw Error('synthetic context unavailable');
-          return {sessionId:window.mode==='local'?'local-session':window.fixtureSession||'remote:fixture:one',projectPath:window.mode==='local'?'/local/project':'remote-project:fixture',configured:window.mode!=='unconfigured',config:{target:'fixture-host',directory:'/remote/project/uploads',port:'',identity:''},locale:'en',job:null};
+          return {sessionId:window.mode==='local'?'local-session':window.fixtureSession||'remote:fixture:one',projectPath:window.mode==='local'?'/local/project':'remote-project:fixture',configured:window.mode!=='unconfigured',config:{target:'fixture-host',directory:'/remote/project/uploads',port:'',identity:''},locale:'en',job:null,profileScope:'server',bindingKey:'binding-a',configurationKey:window.configurationKey};
         }
-        if(method==='pasteBegin')return job={id:'fixture-job',sessionId:args.sessionId,state:'receiving',received:0,total:5};
+        if(method==='pasteBegin'){if(args.configurationKey!==window.configurationKey)throw Error('stale configuration');return job={id:'fixture-job',sessionId:args.sessionId,state:'receiving',received:0,total:5};}
         if(method==='pasteChunk'){job.received+=atob(args.data).length;return {...job};}
-        if(method==='pasteFinish'||method==='pastePoll'){if(window.mode==='detached')window.fixtureSession='remote:fixture:two';return {...job,state:window.mode==='hold'?'uploading':window.mode==='error'?'error':'done',sent:5,error:window.mode==='error'?'Synthetic permission denied':undefined,results:[{path:'/remote/project/uploads/file.txt',size:5,sha256:'a'.repeat(64)}]};}
+        if(method==='pasteFinish'||method==='pastePoll'){if(window.mode==='detached')window.fixtureSession='remote:fixture:two';if(window.mode==='changed-config')window.configurationKey='config-b';return {...job,state:window.mode==='hold'?'uploading':window.mode==='error'?'error':'done',sent:5,error:window.mode==='error'?'Synthetic permission denied':undefined,results:[{path:'/remote/project/uploads/file.txt',size:5,sha256:'a'.repeat(64)}]};}
         if(method==='pasteCancel'){window.cancelCalls=(window.cancelCalls||0)+1;return {...job,state:'cancelled'};}
         throw Error('Unexpected test boundary call: '+method);
       }
@@ -68,6 +68,11 @@ test("compact SSH status retains real paste controls without a second settled te
   await expect(resume).toBeVisible();
   await page.evaluate(()=>{window.fixtureSession='remote:fixture:one';window.mode='done';});
   await resume.click();await expect(success).toBeVisible();await expect(resume).toHaveCount(0);
+  await page.evaluate(()=>{window.mode='changed-config';window.pasteFixture();});
+  await expect(page.getByRole('status')).toContainText('destination or folder changed');
+  await expect(page.locator('.composer-input')).toContainText('SSH-upload:');
+  await page.evaluate(()=>{window.configurationKey='config-a';window.mode='done';});
+  await resume.click();await expect(success).toBeVisible();
   await page.evaluate(()=>{window.mode='error';window.pasteFixture();});
   const failure=page.getByRole('button',{name:/Cancel pasted upload.*Synthetic permission denied/});
   await expect(failure).toBeVisible();await expect(failure.locator('svg')).toHaveCount(1);

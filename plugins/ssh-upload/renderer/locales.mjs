@@ -71,3 +71,26 @@ Object.assign(zh, {
   transferChanged: '确认期间会话或草稿发生变化，请重新拖入或粘贴文件。',
   contextFailed: '暂无法确认当前会话，文件未添加，也未上传。',
 });
+
+Object.assign(en, {
+  operationBusy: 'Another SSH setup or upload operation is still starting. Wait for it to finish and retry.',
+  profileScopeNote: 'Connection details are shared by this server. The upload folder is specific to this project.',
+  profilesInvalid: 'Saved SSH settings have an unsupported format. They were not reset; repair the plugin settings and retry.',
+  profilesReadFailed: 'Saved SSH settings could not be read. No new configuration was enabled.',
+  profilesSaveFailed: 'Saving SSH settings could not be confirmed. These unsaved values were not enabled.',
+  configurationChanged: 'The conversation, SSH project or destination changed. Return to the original context or cancel and retry.',
+  pluginUnloaded: 'SSH Upload was unloaded. Reload the plugin and retry.',
+  settingsBusy: 'Finish or cancel the active upload before changing SSH settings.',
+  pasteConfigurationChanged: 'The SSH destination or folder changed. Restore the original configuration or cancel this placeholder.',
+});
+Object.assign(zh, {
+  operationBusy: '另一项 SSH 配置或上传操作正在启动，请等待完成后重试。',
+  profileScopeNote: '连接资料由这台服务器共用；上传目录仅属于当前项目。',
+  profilesInvalid: '已保存的 SSH 配置格式不受支持，未重置原数据。请修复插件设置后重试。',
+  profilesReadFailed: '无法读取已保存的 SSH 配置，未启用新配置。',
+  profilesSaveFailed: '无法确认 SSH 配置已保存，未启用这些未保存的值。',
+  configurationChanged: '会话、SSH 项目或目标已变化。请返回原上下文，或取消后重试。',
+  pluginUnloaded: 'SSH 上传插件已卸载，请重新加载后重试。',
+  settingsBusy: '请先完成或取消当前上传，再修改 SSH 配置。',
+  pasteConfigurationChanged: 'SSH 目标或目录已变化，请恢复原配置，或取消此占位后重试。',
+});

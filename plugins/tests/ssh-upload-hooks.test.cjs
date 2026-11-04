@@ -48,8 +48,8 @@ test("real hooks stay dormant locally and persist targets only for remote conver
   mismatch=true;
   const rejected=await plugin.onRendererCall('context');
   assert.equal(rejected.configured,false);
-  assert.match(rejected.configError,/project|workspace/i);
-  await assert.rejects(plugin.onRendererCall('saveConfig',{sessionId:session.sessionId,config:{target:'wrong'}}),/project|workspace/i);
+  assert.match(rejected.configError,/项目|会话|上下文/);
+  await assert.rejects(plugin.onRendererCall('saveConfig',{sessionId:session.sessionId,config:{target:'wrong'}}),{code:'SSH_CONTEXT_CHANGED'});
   mismatch=false;
   session = {sessionId:"remote:host-a:a",projectPath:"/project-a"};
   assert.equal((await plugin.onRendererCall("context")).isRemote,true);
@@ -63,6 +63,6 @@ test("real hooks stay dormant locally and persist targets only for remote conver
   await assert.rejects(plugin.onRendererCall("start", { id: "unknown-job", config: { target: "wrong-host" } }), /job/i);
   assert.equal((await plugin.onRendererCall("context")).config.target, "");
   deny = true;
-  await assert.rejects(plugin.onRendererCall("saveConfig", { sessionId: session.sessionId, config: { target: "server-b" } }), /locked/);
+  await assert.rejects(plugin.onRendererCall("saveConfig", { sessionId: session.sessionId, config: { target: "server-b" } }), { code: "SSH_SETTINGS_SAVE_FAILED" });
   assert.equal((await plugin.onRendererCall("context")).config.target, "");
 });

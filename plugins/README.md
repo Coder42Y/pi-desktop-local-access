@@ -39,6 +39,8 @@ User-supplied archive: pi-desktop-plugins.zip, SHA-256
 Imported source/tests only; macOS metadata and packaged dist files were omitted.
 Imported test machine paths and incident session/project IDs were replaced with
 synthetic equivalents. No user runtime configuration was imported.
-The SSH Upload 0.2.3 candidate applies the approved compact gray control and
-vector outcome indicators. Transfer, settings persistence and permission logic
-are intentionally unchanged. No deployment or package publication is implied.
+The SSH Upload 0.3.0 candidate retains the approved compact UI and adds shared
+server connections with project-specific folders for new SSH workspace projects.
+Its versioned settings preserve old per-context records. Legacy remote histories
+keep their old matching rules, and permissions/SSH authentication are unchanged.
+No deployment or package publication is implied.

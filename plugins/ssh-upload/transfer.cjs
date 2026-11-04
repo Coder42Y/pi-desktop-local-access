@@ -184,7 +184,7 @@ function createController(deps) {
     const session = await deps.getSession();
     if (!session?.sessionId) throw new Error("Open a conversation before uploading.");
     if (job && ["selecting", "uploading"].includes(job.state)) throw new Error("An upload job is already active.");
-    const selected = { id: randomUUID(), sessionId: session.sessionId, state: "selecting", files: [], results: [], sent: 0, abort: new AbortController() };
+    const selected = { id: randomUUID(), sessionId: session.sessionId, state: "selecting", bindingKey: session.bindingKey, files: [], results: [], sent: 0, abort: new AbortController() };
     job = selected;
     void (async () => {
       try {
@@ -205,6 +205,7 @@ function createController(deps) {
     const session = await deps.getSession();
     if (current.sessionId !== session?.sessionId) throw new Error("Session changed. Return to the original session to upload.");
     if (current.state !== "selected") throw new Error("Upload job has no selected files.");
+    if (current.bindingKey && current.bindingKey !== session.bindingKey) throw Object.assign(new Error("SSH project changed before upload."), { code: "SSH_CONTEXT_CHANGED" });
     const config = validateConfig(input);
     current.state = "uploading";
     void (async () => {

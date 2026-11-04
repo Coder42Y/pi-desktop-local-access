@@ -19,6 +19,7 @@ Each ADR includes:
 ## Index
 
 | ID | Title | Status |
+| ssh-upload-shared-profiles | [Shared SSH Upload connection profiles](ssh-upload-shared-profiles.md) | Accepted for plugin-only candidate |
 |---|---|---|
 | local-file-viewing-all-directories | [All-directory local file viewing in a private build](local-file-viewing-all-directories.md) | Accepted for the user-requested local build only |
 | plugin-projects-list | [Read-only durable project enumeration for plugins](plugin-projects-list.md) | Accepted |

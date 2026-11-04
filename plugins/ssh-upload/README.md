@@ -1,9 +1,9 @@
-# SSH Upload for PI-Desktop — 0.2.3 candidate
+# SSH Upload for PI-Desktop — 0.3.0 candidate
 
 User-authored standalone plugin, imported from the supplied 0.2.2 source archive.
-This candidate changes only Composer control presentation: a subdued aligned
-label, adjacent SVG success/failure marks and accessible status details. It is
-not installed, packaged or published by this source change.
+This candidate retains the compact Composer UI and adds server-level connection
+reuse with independent project upload folders for new SSH workspace projects.
+It is not installed, packaged or published by this source change.
 
 ## Behavior
 
@@ -20,7 +20,7 @@ name and tooltip rather than a second long visible line. Receiving/uploading
 progress, configure/resume actions and unverified-context warnings remain visible.
 English and Chinese labels follow the existing locale catalog.
 
-## Configuration and security (unchanged)
+## Configuration and security
 
 Configure a system SSH alias or user@host, optional port and identity-file path.
 Only non-interactive key/agent authentication is supported. No password is stored
@@ -28,16 +28,40 @@ and the plugin does not reuse Desktop's saved host/password records. Confirm the
 host fingerprint in Terminal first; StrictHostKeyChecking=yes remains enforced.
 Encrypted keys must already be unlocked by the user's SSH agent.
 
-Targets are isolated by project and Host. Previous targets may be suggested,
-not silently bound to another project. Save explicitly for the selected project.
-SSH workspaces use the public, read-only project/get metadata operation and
-receive files under their workspace .pi-desktop/uploads directory. Both lexical
-and canonical remote path checks remain enforced. A failed settings save is
-reported rather than treated as successful persistence.
+For new SSH workspace projects, save the connection once for the selected
+server. Other projects on that same stable Host reuse the SSH alias, optional
+port and identity-file path. Each project derives its own .pi-desktop/uploads
+folder from current public project/get metadata; custom folders remain relative
+to that project's root. Connections and project folders are separate, versioned
+plugin settings. No password or private-key contents are collected.
 
-This UI task does not implement or qualify configure-once/restart persistence.
-main.js, transfer.cjs, paste-store.cjs, renderer/paste.mjs and renderer/workflow.mjs
-remain byte-identical to the uploaded 0.2.2 source.
+New conversations and plugin/application reloads do not use a conversation ID as
+the new workspace profile identity. A changed server binding never silently
+borrows another server's target or custom directory. Changing a shared connection
+intentionally affects that server's projects; the dialog explains this scope.
+
+Old per-context profiles are retained for compatibility. They do not prove a
+stable Host identity, so an unmapped old target is only suggested and requires
+one explicit confirmation/save before server-wide reuse. Do not uninstall to
+migrate. Existing valid legacy remote: histories retain their previous matching
+rules; their API lacks sufficient root metadata for the new automatic behavior.
+No new Desktop or remote Host metadata interface/permission was added.
+
+Writes read current settings, merge under one plugin-owned queue, validate and
+check the active binding before one SDK setSettings call. Unknown inner storage
+versions or malformed profile strings are errors, not empty replacement data.
+Unknown legacy record fields are preserved but excluded from renderer config.
+Write failure does not enable the proposed unsaved configuration. Active uploads
+block saves; snapshots and completed-result insertion are checked against their
+original binding/configuration identity. Both lexical and physical transfer-path
+checks remain enforced.
+
+The plugin uses the existing SDK storage, not an independent config file. The
+current host SDK silently returns defaults if its outer settings.json is corrupt
+and does not promise an atomic outer-file write. Plugin-only changes cannot
+identify or repair that host-level condition or guarantee power-loss recovery.
+The isolated cold-process test verifies the plugin's save/read behavior over a
+temporary file-backed SDK boundary, not native installed Desktop restart.
 
 ## Operations and limits
 

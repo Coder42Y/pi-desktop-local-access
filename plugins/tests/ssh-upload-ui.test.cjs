@@ -31,7 +31,7 @@ test("composer control handles success, failures, cancellation and session switc
         }
         const {method,args}=payload;
         if(method === 'saveConfig') {f.saved=args.config; return {config:args.config};}
-        if(method === 'context') return {sessionId:f.sessionId,projectPath:f.sessionId==='local-session'?'/local-project':f.projectPath,config:{target:f.sessionId==='remote:test:b'?'other@server':'',port:'',directory:'/remote/project/.pi-desktop/uploads',identity:''},locale:'zh-CN',job:f.job};
+        if(method === 'context') return {sessionId:f.sessionId,projectPath:f.sessionId==='local-session'?'/local-project':f.projectPath,config:{target:f.sessionId==='remote:test:b'?'other@server':f.target!==undefined?f.target:'',port:'',directory:'/remote/project/.pi-desktop/uploads',identity:''},locale:'zh-CN',job:f.job,profileScope:'server',bindingKey:f.binding||f.sessionId,configurationKey:f.configurationKey||'fixture-v1'};
         if(method === 'select') return f.job={id:'job',state:'selected',sessionId:f.sessionId,files:[{name:'data.bin',size:5}],results:[],sent:0,total:5};
         if(method === 'cancel') { f.job.state='cancelled'; return {...f.job}; }
         if(method === 'start') {
@@ -41,7 +41,7 @@ test("composer control handles success, failures, cancellation and session switc
             if(!f.fail) f.job.results=[{path:'/srv/uploads/data.bin',sha256:'a'.repeat(64),size:5}];},80);
           return {...f.job};
         }
-        if(method === 'verifySession') { if(f.sessionId!==f.job.sessionId) throw Error('Session changed'); return {sessionId:f.sessionId}; }
+        if(method === 'verifySession') { if(f.sessionId!==f.job.sessionId) throw Error('Session changed'); return {sessionId:f.sessionId,configurationKey:f.configurationKey||'fixture-v1'}; }
         throw Error('Unknown method');
       }
     });
@@ -64,10 +64,16 @@ test("composer control handles success, failures, cancellation and session switc
   await page.getByRole("button", { name: "保存 SSH 目标" }).click();
   await expect(page.getByText("已保存，现在可直接在聊天输入框粘贴文件。", { exact: true })).toBeVisible();
   assert.equal(await page.evaluate(() => window.fixture.saved.target), "user@server");
+  await expect(page.getByText('连接资料由这台服务器共用；上传目录仅属于当前项目。',{exact:true})).toBeVisible();
+  await page.evaluate(()=>{window.fixture.binding='new-binding';window.fixture.target='fresh@server';});
+  await expect(page.getByLabel('SSH 目标',{exact:true})).toHaveValue('fresh@server');
+  await page.evaluate(()=>{window.fixture.binding='restored-binding';window.fixture.target='user@server';});
+  await expect(page.getByLabel('SSH 目标',{exact:true})).toHaveValue('user@server');
   await page.getByRole("button", { name: "选择文件" }).click();
   await page.getByRole("button", { name: "上传文件", exact: true }).click();
   await expect(page.getByRole("button", { name: "插入远端路径" })).toBeVisible();
   await page.getByRole("button", { name: "插入远端路径" }).click();
+  await expect.poll(() => page.evaluate(() => window.fixture.inserts.length)).toBe(1);
   assert.match(await page.evaluate(() => window.fixture.inserts[0]), /\/srv\/uploads\/data.bin/);
   await page.evaluate(() => { window.fixture.race = true; });
   await page.getByRole("button", { name: "插入远端路径" }).click();

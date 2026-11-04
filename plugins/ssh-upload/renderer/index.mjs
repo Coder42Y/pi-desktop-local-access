@@ -32,12 +32,13 @@ function UploadDialog({ onClose }) {
   const [draft, setDraft] = useState(null);
   const [prepared, setPrepared] = useState(null);
   const seenSession = useRef(undefined);
+  const seenBinding = useRef(undefined);
   const busy = useRef(false);
   const firstInput = useRef(null);
   const dialog = useRef(null);
   const labels = labelsFor(context?.locale || navigator.language);
   const active = job && ['selecting', 'uploading'].includes(job.state);
-  const changed = job && context?.sessionId !== job.sessionId;
+  const changed = job && (context?.sessionId !== job.sessionId || (job.bindingKey && context?.bindingKey !== job.bindingKey));
   useEffect(() => {
     const previousFocus = document.activeElement;
     const opened = host.ui.openLayer();
@@ -50,8 +51,9 @@ function UploadDialog({ onClose }) {
         if (!disposed) {
           setContext(next);
           setJob(next.job);
-          if (initial || seenSession.current !== next.sessionId) {
+          if (initial || seenSession.current !== next.sessionId || seenBinding.current !== next.bindingKey) {
             seenSession.current = next.sessionId;
+            seenBinding.current = next.bindingKey;
             const initialConfig = next.suggestedConfig || next.config;
             setConfig({ ...initialConfig, port: initialConfig.port || '' });
             if (next.suggestedConfig) setMessage(labelsFor(next.locale || navigator.language).confirmTarget);
@@ -73,14 +75,17 @@ function UploadDialog({ onClose }) {
     const timer = setTimeout(() => {
       void call('verifySession', { id: job.id }).then((verified) => {
         if (!disposed) setPrepared({
-          expectedGeneration: draft.generation,
-          text: draft.text + insertionText(job, verified.sessionId, labels),
-          marks: draft.marks.map((mark) => ({ id: mark.id })),
+          configurationKey: verified.configurationKey,
+          replacement: {
+            expectedGeneration: draft.generation,
+            text: draft.text + insertionText(job, verified.sessionId, labels),
+            marks: draft.marks.map((mark) => ({ id: mark.id })),
+          },
         });
       }).catch((failure) => { if (!disposed) setError(failure.message); });
     }, 200);
     return () => { disposed = true; clearTimeout(timer); };
-  }, [job?.id, job?.state, changed, context?.sessionId, draft?.generation, labels]);
+  }, [job?.id, job?.state, changed, context?.sessionId, context?.bindingKey, context?.configurationKey, draft?.generation, labels]);
   useEffect(() => {
     const escape = (event) => {
       if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
@@ -121,7 +126,8 @@ function UploadDialog({ onClose }) {
       field('directory', labels.directory, '~/.pi-desktop/uploads'),
       field('identity', labels.identity, labels.identityHint),
       h('p', { className: 'su-note' }, labels.note),
-      changed ? h('p', { className: 'su-error', role: 'alert' }, labels.changed) : null,
+      context?.profileScope === 'server' ? h('p', { className: 'su-note' }, labels.profileScopeNote) : null,
+      changed ? h('p', { className: 'su-error', role: 'alert' }, context?.sessionId !== job.sessionId ? labels.changed : labels.configurationChanged) : null,
       h('div', { className: 'su-files', 'aria-live': 'polite' },
         job ? h('strong', null, labels[job.state] || job.state) : h('p', null, labels.empty),
         job?.files?.length ? h('ul', null, ...job.files.map((file, index) => h('li', { key: index }, h('span', null, file.name), h('small', null, sizeText(file.size))))) : null,
@@ -135,16 +141,18 @@ function UploadDialog({ onClose }) {
       message ? h('p', { role: 'status' }, message) : null,
       h('footer', { className: 'su-actions' },
         !active ? h('button', { type: 'button', disabled: pending || !context?.sessionId || !config.target.trim(), onClick: () => run(async () => {
-          const saved = await call('saveConfig', { config, sessionId: context.sessionId });
+          const saved = await call('saveConfig', { config, sessionId: context.sessionId, ...(context.bindingKey ? { bindingKey: context.bindingKey } : {}) });
           setConfig({ ...saved.config, port: saved.config.port || '' });
           await pasteBridge?.refresh();
           setMessage(labels.saved);
         }) }, labels.save) : null,
         active || job?.state === 'selected' ? h('button', { type: 'button', disabled: pending, onClick: () => run(async () => setJob(await call('cancel', { id: job.id }))) }, labels.cancel) : null,
         !active ? h('button', { type: 'button', disabled: pending || !context?.sessionId, onClick: () => run(async () => setJob(await call('select'))) }, labels.choose) : null,
-        job?.state === 'selected' ? h('button', { type: 'button', className: 'su-primary', disabled: pending || changed || !config.target.trim(), onClick: () => run(async () => setJob(await call('start', { id: job.id, config }))) }, labels.start) : null,
+        job?.state === 'selected' ? h('button', { type: 'button', className: 'su-primary', disabled: pending || changed || !config.target.trim(), onClick: () => run(async () => setJob(await call('start', { id: job.id, config, ...(context.bindingKey ? { bindingKey: context.bindingKey } : {}) }))) }, labels.start) : null,
         job?.state === 'done' ? h('button', { type: 'button', className: 'su-primary', disabled: pending || changed || !prepared, onClick: () => run(async () => {
-          await host.dispatch('composer.replaceDraft', prepared);
+          const verified = await call('verifySession', { id: job.id });
+          if (prepared.configurationKey && verified.configurationKey !== prepared.configurationKey) throw new Error(labels.configurationChanged);
+          await host.dispatch('composer.replaceDraft', prepared.replacement);
           setMessage(labels.inserted);
         }) }, labels.insert) : null),
       h('p', { className: 'su-note' }, labels.pasteHint),

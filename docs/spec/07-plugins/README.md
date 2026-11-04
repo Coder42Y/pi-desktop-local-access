@@ -57,8 +57,11 @@ or activate a plugin. Shared tests and test-only dependencies live under the
 private `plugins` workspace. Runtime settings, keys, generated .piplug files
 and distribution archives are excluded.
 
-The SSH Upload 0.2.3 candidate uses a compact gray Composer control with adjacent
-SVG success/failure indicators. Settled details remain accessible and failure
-cancellation is preserved. Progress, configure/resume, transfer and persistence
-logic are unchanged. See the delivery record under
-`docs/Process/ssh-upload-plugin-ui/`.
+The SSH Upload 0.3.0 candidate retains the compact gray control/SVG outcomes and
+adds server-level connection metadata plus project-specific relative directories
+for new SSH workspace projects. Save once per stable Host, restore through SDK
+settings, and derive each project's default folder from its current root. Legacy
+matching remains per-context. Unknown inner settings versions fail without reset;
+stale contexts/results cannot reuse another binding. Permissions and authentication
+are unchanged. See `docs/Process/ssh-upload-profile-reuse/` and the shared-profiles
+ADR for one-time old-target confirmation and host SDK durability limits.

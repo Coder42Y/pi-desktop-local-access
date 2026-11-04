@@ -52,7 +52,7 @@ function createPasteStore(deps) {
     const config = validateConfig(saved);
     await fs.mkdir(deps.dataPath, { recursive: true });
     const directory = await fs.mkdtemp(path.join(deps.dataPath, "paste-"));
-    const current = { id: randomUUID(), sessionId: session.sessionId, config, directory, files, state: "receiving", results: [], sent: 0, abort: new AbortController(), updated: Date.now() };
+    const current = { id: randomUUID(), sessionId: session.sessionId, configurationKey: session.configurationKey, config, directory, files, state: "receiving", results: [], sent: 0, abort: new AbortController(), updated: Date.now() };
     try {
       for (const [i, file] of files.entries()) {
         file.path = path.join(directory, `${i}.part`);
@@ -82,6 +82,7 @@ function createPasteStore(deps) {
     if (current.files.some((file) => file.received !== file.size)) throw new Error("Pasted file is incomplete.");
     const session = await deps.getSession();
     if (session?.sessionId !== current.sessionId) throw new Error("Session changed before upload; return and paste again.");
+    if (current.configurationKey && session.configurationKey !== current.configurationKey) throw Object.assign(new Error("SSH configuration changed before paste upload."), { code: "SSH_CONFIGURATION_CHANGED" });
     current.state = "uploading";
     current.work = (async () => {
       let completed = 0;

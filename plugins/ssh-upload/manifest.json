@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "local.ssh-upload",
   "name": "SSH Upload",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Upload pasted or dropped files in remote conversations and SSH workspace projects. Uses read-only project/get to keep uploads inside the remote workspace. Key authentication only.",
   "main": "main.js",
   "renderer": "renderer/index.mjs",
@@ -11,7 +11,9 @@
   "permissions": ["renderer.extension", "desktop.control"],
   "contributes": {
     "settings": [
-      { "key": "profiles", "type": "string", "default": "{}", "title": "SSH destinations (JSON, no passwords)" }
+      { "key": "profiles", "type": "string", "default": "{}", "title": "SSH destinations (JSON, no passwords)" },
+      { "key": "connections", "type": "string", "default": "{\"version\":1,\"hosts\":{}}", "title": "Shared SSH server connections (JSON, no passwords)" },
+      { "key": "projectDirectories", "type": "string", "default": "{\"version\":1,\"projects\":{}}", "title": "SSH project upload directories (JSON)" }
     ]
   },
   "engines": { "piDesktop": ">=0.21.0" },

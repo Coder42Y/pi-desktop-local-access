@@ -6,3 +6,5 @@
 **/*.key
 **/config.local.json
 **/runtime-data/
+**/settings.json
+**/profiles.local.json

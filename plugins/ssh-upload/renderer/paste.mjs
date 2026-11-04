@@ -113,6 +113,10 @@ export function installPasteBridge(options) {
     if (!task?.result) return;
     const selected = await refresh();
     if (disposed || task.cancelled) return;
+    if (task.configurationKey && selected.configurationKey !== task.configurationKey) {
+      status('detached', labels().pasteConfigurationChanged, task.result);
+      return;
+    }
     const editor = Array.from(doc.querySelectorAll(EDITOR)).find(candidate => candidate.closest('.composer-shell') && markerRange(candidate, task.marker));
     if (selected.sessionId === task.sessionId && editor && replaceMarker(editor, task.marker, insertionText(task.result, task.sessionId, labels()))) {
       current = null;
@@ -121,7 +125,7 @@ export function installPasteBridge(options) {
   };
   const run = async (task, files) => {
     try {
-      const job = await options.call('pasteBegin', { sessionId: task.sessionId, files: files.map(file => ({ name: file.name || 'pasted-image.png', size: file.size })) });
+      const job = await options.call('pasteBegin', { sessionId: task.sessionId, ...(task.configurationKey ? { configurationKey: task.configurationKey } : {}), files: files.map(file => ({ name: file.name || 'pasted-image.png', size: file.size })) });
       task.id = job.id;
       if (disposed || task.cancelled) { await options.call('pasteCancel', { id: job.id }).catch(() => {}); return; }
       let received = 0;
@@ -203,7 +207,7 @@ export function installPasteBridge(options) {
           const range = doc.caretRangeFromPoint?.(coordinates.clientX, coordinates.clientY);
           if (range && editor.contains(range.commonAncestorContainer)) { const selection = doc.getSelection(); selection.removeAllRanges(); selection.addRange(range); }
         }
-        const task = { sessionId: selected.sessionId, editor, marker: `⟦SSH-upload:${crypto.randomUUID()}⟧`, cancelled: false };
+        const task = { sessionId: selected.sessionId, configurationKey: selected.configurationKey, editor, marker: `⟦SSH-upload:${crypto.randomUUID()}⟧`, cancelled: false };
         current = task; insertMarker(editor, task.marker);
         status('receiving', labels().pasteReceiving);
         void run(task, files);
