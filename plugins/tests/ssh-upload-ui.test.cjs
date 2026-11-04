@@ -16,6 +16,7 @@ test("composer control handles success, failures, cancellation and session switc
     import React from 'react';
     import {createRoot} from 'react-dom/client';
     import {onLoad} from ${JSON.stringify(entry)};
+    import {isUserGesture} from ${JSON.stringify(path.resolve(__dirname, '../../apps/desktop/src/plugins/renderer-host/composer-actions.ts'))};
     window.fixture = { sessionId: '11111111-1111-4111-8111-111111111111', projectPath:'remote-project:22222222-2222-4222-8222-222222222222', job: null, fail: false, inserts: [], generation: 1, race: false };
     onLoad({
       ui: { injectStyle(css) { const el=document.createElement('style'); el.textContent=css; document.head.append(el); },
@@ -25,12 +26,14 @@ test("composer control handles success, failures, cancellation and session switc
       async dispatch(action, payload) {
         const f=window.fixture;
         if (action === 'composer.insertText' || action === 'composer.replaceDraft') {
+          f.gestures ||= []; f.gestures.push(isUserGesture());
+          if (!f.gestures.at(-1)) throw Error('PLUGIN_DRAFT_REMOTE: replacement requires a trusted input event');
           if(f.race) {f.race=false; f.sessionId='remote:test:b'; f.generation++; f.listener?.({text:'other draft',marks:[],generation:f.generation});}
           if(action === 'composer.replaceDraft' && payload.expectedGeneration !== f.generation) throw Error('Draft changed; retry insertion.');
           f.inserts.push(payload.text); f.generation++; f.listener?.({text:payload.text,marks:[],generation:f.generation}); return {ok:true};
         }
         const {method,args}=payload;
-        if(method === 'saveConfig') {f.saved=args.config; return {config:args.config};}
+        if(method === 'saveConfig') {if(f.saveGate) await f.saveGate; f.saved=args.config; return {config:args.config};}
         if(method === 'context') return {sessionId:f.sessionId,projectPath:f.sessionId==='local-session'?'/local-project':f.projectPath,config:{target:f.sessionId==='remote:test:b'?'other@server':f.target!==undefined?f.target:'',port:'',directory:'/remote/project/.pi-desktop/uploads',identity:''},locale:'zh-CN',job:f.job,profileScope:'server',bindingKey:f.binding||f.sessionId,configurationKey:f.configurationKey||'fixture-v1'};
         if(method === 'select') return f.job={id:'job',state:'selected',sessionId:f.sessionId,files:[{name:'data.bin',size:5}],results:[],sent:0,total:5};
         if(method === 'cancel') { f.job.state='cancelled'; return {...f.job}; }
@@ -41,7 +44,7 @@ test("composer control handles success, failures, cancellation and session switc
             if(!f.fail) f.job.results=[{path:'/srv/uploads/data.bin',sha256:'a'.repeat(64),size:5}];},80);
           return {...f.job};
         }
-        if(method === 'verifySession') { if(f.sessionId!==f.job.sessionId) throw Error('Session changed'); return {sessionId:f.sessionId,configurationKey:f.configurationKey||'fixture-v1'}; }
+        if(method === 'verifySession') { if(f.sessionId!==f.job.sessionId) throw Error('Session changed'); if(f.configurationKey && f.configurationKey !== 'fixture-v1') throw Error('SSH configuration changed after upload.'); return {sessionId:f.sessionId,configurationKey:f.configurationKey||'fixture-v1'}; }
         throw Error('Unknown method');
       }
     });
@@ -51,7 +54,7 @@ test("composer control handles success, failures, cancellation and session switc
     else { res.setHeader("Content-Type", "text/html"); res.end('<!doctype html><html><head><meta charset="utf-8"></head><body><div id="slot"></div><script src="/app.js"></script></body></html>'); }
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => server.close(resolve)));
+  t.after(() => { server.closeAllConnections(); return new Promise((resolve) => server.close(resolve)); });
   const browser = await require("./helpers/browser.cjs").launchBrowser(chromium);
   t.after(() => browser.close());
   const page = await browser.newPage({ locale: "zh-CN", viewport: { width: 1000, height: 900 } });
@@ -60,6 +63,7 @@ test("composer control handles success, failures, cancellation and session switc
   await page.goto(`http://127.0.0.1:${server.address().port}`);
   await page.getByRole("button", { name: "SSH 上传" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(page.getByRole("button", { name: "选择文件" })).toBeEnabled();
   await page.getByLabel("SSH 目标", { exact: true }).fill("user@server");
   await page.getByRole("button", { name: "保存 SSH 目标" }).click();
   await expect(page.getByText("已保存，现在可直接在聊天输入框粘贴文件。", { exact: true })).toBeVisible();
@@ -73,8 +77,25 @@ test("composer control handles success, failures, cancellation and session switc
   await page.getByRole("button", { name: "上传文件", exact: true }).click();
   await expect(page.getByRole("button", { name: "插入远端路径" })).toBeVisible();
   await page.getByRole("button", { name: "插入远端路径" }).click();
+  await expect.poll(() => page.evaluate(() => window.fixture.gestures?.at(-1)), { message: "composer.replaceDraft must dispatch within the trusted click" }).toBe(true);
   await expect.poll(() => page.evaluate(() => window.fixture.inserts.length)).toBe(1);
   assert.match(await page.evaluate(() => window.fixture.inserts[0]), /\/srv\/uploads\/data.bin/);
+  const insert = page.getByRole("button", { name: "插入远端路径" });
+  await expect(insert).toBeEnabled();
+  await insert.evaluate(el => el.click());
+  await expect(page.getByRole("alert").first()).toContainText('PLUGIN_DRAFT_REMOTE');
+  assert.equal(await page.evaluate(() => window.fixture.inserts.length), 1);
+  await expect(insert).toBeEnabled();
+  await page.evaluate(() => { window.fixture.configurationKey = 'changed-config'; });
+  await expect(insert).toBeDisabled();
+  assert.equal(await page.evaluate(() => window.fixture.inserts.length), 1);
+  await page.evaluate(() => { window.fixture.configurationKey = 'fixture-v1'; });
+  await expect(insert).toBeEnabled();
+  await page.evaluate(() => { window.fixture.saveGate = new Promise(resolve => window.fixture.releaseSave = resolve); });
+  await page.getByRole("button", { name: "保存 SSH 目标" }).click();
+  await expect(insert).toBeDisabled();
+  await page.evaluate(() => { window.fixture.releaseSave(); window.fixture.saveGate = null; });
+  await expect(insert).toBeEnabled();
   await page.evaluate(() => { window.fixture.race = true; });
   await page.getByRole("button", { name: "插入远端路径" }).click();
   await expect(page.getByRole("alert").first()).toContainText(/Draft changed|另一个会话/);

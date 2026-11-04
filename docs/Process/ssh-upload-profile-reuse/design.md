@@ -87,3 +87,40 @@ mutual exclusion and write-time activity checks fix it. The exact new regression
 failed against an isolated pre-gate main snapshot and passed on current source.
 No second review, application/Host changes, live settings reads, installation,
 commit, push or release. SDK outer-file limits remain explicit above.
+
+
+## PR feedback: trusted insertion
+
+The user authorized fixing PR #5, regression verification, independent code
+review and merge without another approval gate. Keep the approved UI, public
+Host gesture guard, settings format, permissions and transfer behavior unchanged.
+No new visual mockup is needed: this is an existing-button behavior correction.
+
+### Todo list
+- [x] gesture-repro: enforce the real Host isUserGesture predicate at the browser fixture boundary; demonstrate failure on the old handler.
+- [x] prepared-insert: verify asynchronously before enabling Insert, invalidate pending/configuration/session/draft state, and dispatch synchronously from the trusted click.
+- [x] gesture-acceptance: prove real-click success, synthetic-click refusal, stale generation/session/configuration refusal, and save/insertion exclusion.
+- [x] feedback-review: run pure, restart, browser, syntax/DevKit and repository checks; obtain one independent read-only review before updating PR #5.
+
+No Host/SDK security code or persistence schema changes are needed. The lowest
+sufficient regression is the real plugin component under isolated Chromium with
+the actual Host gesture predicate, plus existing backend configuration tests.
+The prepared snapshot carries session, binding, configuration, job and draft
+identity. No queued verification may precede replacement in the click handler.
+
+
+### PR feedback verification
+
+The original click handler failed the real gesture predicate (expected true,
+received false). The fixed component passed all four isolated Chromium workflows;
+41 pure/integration/cold-process tests passed, without real SSH or user profiles.
+Syntax, library TypeScript builds, lint, DevKit, architecture, policy sync, docs
+and whitespace checks passed. Local scripts were invoked directly because pnpm
+12 tried to auto-install into linked dependency directories; no second dependency
+environment was created. Remote CI retains the standard pnpm gates.
+
+Independent read-only review of the complete unstaged fix on c4d9821 found no
+blocking defects. It verified actual dispatch and draft-bridge contracts as well
+as backend configuration checks. Configuration freshness remains prepared/polled,
+not an atomic backend read during the click; same-dialog saves are excluded and
+refresh context before insertion can resume. No Host/SDK security code changed.

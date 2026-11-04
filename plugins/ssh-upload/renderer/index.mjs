@@ -39,6 +39,10 @@ function UploadDialog({ onClose }) {
   const labels = labelsFor(context?.locale || navigator.language);
   const active = job && ['selecting', 'uploading'].includes(job.state);
   const changed = job && (context?.sessionId !== job.sessionId || (job.bindingKey && context?.bindingKey !== job.bindingKey));
+  const insertReady = prepared && !pending && !changed && !context?.configError &&
+    prepared.jobId === job?.id && prepared.sessionId === context?.sessionId &&
+    prepared.bindingKey === context?.bindingKey && prepared.configurationKey === context?.configurationKey &&
+    prepared.replacement.expectedGeneration === draft?.generation;
   useEffect(() => {
     const previousFocus = document.activeElement;
     const opened = host.ui.openLayer();
@@ -70,11 +74,13 @@ function UploadDialog({ onClose }) {
   useEffect(() => host.composer.subscribeDraft(setDraft), []);
   useEffect(() => {
     setPrepared(null);
-    if (job?.state !== 'done' || changed || !draft) return;
+    if (pending || job?.state !== 'done' || changed || context?.configError || !draft) return;
     let disposed = false;
     const timer = setTimeout(() => {
       void call('verifySession', { id: job.id }).then((verified) => {
+        if (verified.configurationKey !== context.configurationKey) throw new Error(labels.configurationChanged);
         if (!disposed) setPrepared({
+          jobId: job.id, sessionId: verified.sessionId, bindingKey: context.bindingKey,
           configurationKey: verified.configurationKey,
           replacement: {
             expectedGeneration: draft.generation,
@@ -85,7 +91,7 @@ function UploadDialog({ onClose }) {
       }).catch((failure) => { if (!disposed) setError(failure.message); });
     }, 200);
     return () => { disposed = true; clearTimeout(timer); };
-  }, [job?.id, job?.state, changed, context?.sessionId, context?.bindingKey, context?.configurationKey, draft?.generation, labels]);
+  }, [job?.id, job?.state, changed, pending, context?.sessionId, context?.bindingKey, context?.configurationKey, context?.configError, draft?.generation, labels]);
   useEffect(() => {
     const escape = (event) => {
       if (event.key === 'Escape') { event.stopPropagation(); onClose(); }
@@ -143,15 +149,16 @@ function UploadDialog({ onClose }) {
         !active ? h('button', { type: 'button', disabled: pending || !context?.sessionId || !config.target.trim(), onClick: () => run(async () => {
           const saved = await call('saveConfig', { config, sessionId: context.sessionId, ...(context.bindingKey ? { bindingKey: context.bindingKey } : {}) });
           setConfig({ ...saved.config, port: saved.config.port || '' });
+          setContext(await call('context'));
           await pasteBridge?.refresh();
           setMessage(labels.saved);
         }) }, labels.save) : null,
         active || job?.state === 'selected' ? h('button', { type: 'button', disabled: pending, onClick: () => run(async () => setJob(await call('cancel', { id: job.id }))) }, labels.cancel) : null,
         !active ? h('button', { type: 'button', disabled: pending || !context?.sessionId, onClick: () => run(async () => setJob(await call('select'))) }, labels.choose) : null,
         job?.state === 'selected' ? h('button', { type: 'button', className: 'su-primary', disabled: pending || changed || !config.target.trim(), onClick: () => run(async () => setJob(await call('start', { id: job.id, config, ...(context.bindingKey ? { bindingKey: context.bindingKey } : {}) }))) }, labels.start) : null,
-        job?.state === 'done' ? h('button', { type: 'button', className: 'su-primary', disabled: pending || changed || !prepared, onClick: () => run(async () => {
-          const verified = await call('verifySession', { id: job.id });
-          if (prepared.configurationKey && verified.configurationKey !== prepared.configurationKey) throw new Error(labels.configurationChanged);
+        job?.state === 'done' ? h('button', { type: 'button', className: 'su-primary', disabled: !insertReady, onClick: () => run(async () => {
+          if (!insertReady) return;
+          // Dispatch before yielding so the Host captures this trusted click.
           await host.dispatch('composer.replaceDraft', prepared.replacement);
           setMessage(labels.inserted);
         }) }, labels.insert) : null),

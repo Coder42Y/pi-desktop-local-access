@@ -19598,3 +19598,17 @@ their separate platform acceptance.
   received bytes. Tests use synthetic records, local fake transports and isolated
   Chromium. Native Desktop restart/live SSH and SDK outer-file crash recovery
   are explicitly not established by these tests.
+
+
+#### E2E-PLUGIN-ssh-upload-trusted-manual-insert
+
+- Load the actual plugin component with the real Host isUserGesture predicate
+  enforced at the composer replacement boundary, in isolated Chromium.
+- Select/upload via fixture transport, then click Insert: the verified remote
+  path is inserted into the current draft exactly once without sending it.
+- Synthetic clicks are refused. Changed draft generation/session/configuration
+  and a pending settings save block stale insertion. Wait for initial context
+  before entering settings; teardown closes fixture connections on failure.
+- Old asynchronous click-time verification fails the gesture assertion; the
+  synchronous prepared dispatch passes without modifying Host/SDK security.
+- Command: the existing explicit user-plugin test:ui suite with real SSH disabled.

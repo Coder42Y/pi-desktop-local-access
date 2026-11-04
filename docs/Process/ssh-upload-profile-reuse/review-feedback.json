@@ -1,0 +1,9 @@
+{
+  "slug": "ssh-upload-profile-reuse",
+  "verdict": "pass",
+  "critical_count": 0,
+  "informational_count": 0,
+  "critical": [],
+  "informational": [],
+  "summary": "Trusted synchronous insertion preserves prepared identity and Host gesture/generation guards."
+}

@@ -117,3 +117,11 @@ If packaging is later requested, use the official plugin DevKit/PluginPack and
 validate its output; do not hand-assemble an archive. Install an update over the
 same plugin ID rather than uninstalling first to preserve existing plugin data.
 Installation and user-app acceptance have not been performed here.
+
+
+Manual Insert prepares its verified replacement before enabling the button. A
+trusted user click dispatches composer.replaceDraft synchronously, before any
+queued RPC or await can lose the Host gesture. Prepared state is bound to the
+job, session, project binding, configuration and draft generation, and disabled
+while another dialog action or settings save is pending. The Host gesture and
+generation guards remain authoritative; synthetic clicks do not gain permission.

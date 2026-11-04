@@ -65,3 +65,11 @@ matching remains per-context. Unknown inner settings versions fail without reset
 stale contexts/results cannot reuse another binding. Permissions and authentication
 are unchanged. See `docs/Process/ssh-upload-profile-reuse/` and the shared-profiles
 ADR for one-time old-target confirmation and host SDK durability limits.
+
+
+Manual Insert prepares its verified replacement before enabling the button. A
+trusted user click dispatches composer.replaceDraft synchronously, before any
+queued RPC or await can lose the Host gesture. Prepared state is bound to the
+job, session, project binding, configuration and draft generation, and disabled
+while another dialog action or settings save is pending. The Host gesture and
+generation guards remain authoritative; synthetic clicks do not gain permission.

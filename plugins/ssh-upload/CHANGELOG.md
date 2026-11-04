@@ -2,6 +2,9 @@
 
 ## 0.3.0 — unreleased candidate
 
+- Fix manual insertion by dispatching from the trusted click after asynchronous
+  preparation; keep configuration/session/generation and pending-save guards.
+
 - Reuse explicitly confirmed connection metadata per stable SSH Host for new
   workspace projects; keep custom/default folders independent per project.
 - Read saved configuration across conversations/reload instead of keying new
