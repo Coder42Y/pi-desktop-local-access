@@ -158,11 +158,12 @@ pub(super) fn latest_incoming(
 pub fn pending_callbacks(db: &Database, session_id: Option<&str>) -> Result<Vec<Message>> {
     let mut statement = db.conn().prepare_cached(&format!(
         "{SELECT}
-        WHERE kind='completion' AND status='queued' AND (?1 IS NULL OR target_session_id=?1)
-        ORDER BY created_at LIMIT 64"
+        WHERE (kind='completion' OR plugin_id=?2) AND status='queued'
+          AND (?1 IS NULL OR target_session_id=?1)
+        ORDER BY created_at,id LIMIT 64"
     ))?;
     let values = statement
-        .query_map(params![session_id], row)?
+        .query_map(params![session_id, super::workspace::OWNER_ID], row)?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(values)
 }

@@ -69,3 +69,13 @@ test("a duplicate dispatch does not remove the original call's cancellation owne
   assert.equal(f.aborted.length, 1);
   assert.equal(f.replies.find(reply => reply.params.requestId === "request").params.result.errorCode, "TOOL_ABORTED");
 });
+
+
+test("only the admitted top-level flag authorizes SSH external writes", async () => {
+  const f = fixture(() => ({ ok: true, content: "written" }));
+  await f.relay.execute({ ...request, toolName: "Write", args: { path: "/outside/x", content: "x", allowExternalWrites: true } });
+  assert.notEqual(f.sent[0].allowExternalWrites, true, "a model argument cannot authorize the runner");
+  const authorized = fixture(() => ({ ok: true, content: "written" }));
+  await authorized.relay.execute({ ...request, toolName: "Write", allowExternalWrites: true, args: { path: "/outside/x", content: "x" } });
+  assert.equal(authorized.sent[0].allowExternalWrites, true);
+});

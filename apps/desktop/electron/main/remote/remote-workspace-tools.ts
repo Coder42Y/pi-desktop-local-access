@@ -9,6 +9,8 @@ export type RemoteWorkspaceToolRequest = {
   args: unknown;
   remoteWorkspace: { hostKey: string; path: string };
   timeoutMs?: number;
+  /** Set only by Host permission admission, never inferred from args. */
+  allowExternalWrites?: boolean;
   expectedCommandShellId?: string;
   expectedCommandShellDialect?: string;
 };
@@ -53,6 +55,7 @@ export function createRemoteWorkspaceToolRelay(host: HostReply, deps: Dependenci
         result = await boot.executeWorkspaceTool({ ...request.remoteWorkspace,
           sessionId: request.sessionId, turnId: request.turnId, toolCallId: request.toolCallId,
           toolName: request.toolName, args: request.args,
+          ...(request.allowExternalWrites === true ? { allowExternalWrites: true } : {}),
           ...(typeof request.timeoutMs === "number" ? { timeoutMs: request.timeoutMs } : {}),
           ...(request.expectedCommandShellId ? { expectedCommandShellId: request.expectedCommandShellId } : {}),
           ...(request.expectedCommandShellDialect ? { expectedCommandShellDialect: request.expectedCommandShellDialect } : {}),

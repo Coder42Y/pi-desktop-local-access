@@ -107,3 +107,12 @@ Validation: runtime unit coverage for the accepted shapes, the trust boundary,
 tool batches, provider retry, steering before and after the reply, and context
 exclusion; `pnpm test:e2e:session-completion` against the real host ledger,
 sidecar, and a local SSE provider. See E2E-SESSION-completion-notice-allows-silence.
+
+## Amendment: native workspace entry
+
+[Native workspace collaboration](workspace-session-messaging.md) adds Agent-only
+Host tools alongside the reviewed plugin entry. It reuses this ledger and queue,
+without fabricating a plugin context. New ordinary native messages default to no
+callback; existing plugin defaults and contracts stay unchanged. Fork retains its
+independent-snapshot semantics. Phase reports bind to the current subscribed
+source delivery, not the active Desktop selection.

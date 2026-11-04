@@ -57,3 +57,21 @@ describe("owner workspace tools", () => {
     expect(methods).toEqual(["tools.workspaceExecute", "tools.workspaceAbort"]);
   });
 });
+
+
+describe("owner-admitted external filesystem writes", () => {
+  it("forwards the explicit owner flag, never manufacturing it from tool arguments", async () => {
+    const dir = await directory();
+    const calls: Record<string, unknown>[] = [];
+    const host: HostRpc = { async call<T>(_method: string, params: Record<string, unknown> = {}) {
+      calls.push(params); return { ok: true, content: "fixture" } as T;
+    } };
+    const tools = createWorkspaceTools(() => host);
+    await tools.execute({ ...input(dir), toolName: "Write", toolCallId: "ungranted",
+      args: { path: "/outside/file", content: "x", allowExternalWrites: true } }, owner);
+    expect(calls[0]?.allowExternalWrites).not.toBe(true);
+    await tools.execute({ ...input(dir), toolName: "Write", toolCallId: "granted",
+      args: { path: "/outside/file", content: "x" }, allowExternalWrites: true }, owner);
+    expect(calls[1]?.allowExternalWrites).toBe(true);
+  });
+});

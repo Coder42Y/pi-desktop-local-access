@@ -535,6 +535,11 @@ describe("resolveSubagentToolNames", () => {
     expect(resolved.filter((n) => n === "Read")).toHaveLength(1);
   });
 
+  it("does not inherit durable session collaboration into an in-process delegate", () => {
+    const names = ["SessionList", "SessionRead", "SendMessage", "SessionSpawn", "SessionReport"];
+    expect(resolveSubagentToolNames({ tools: [], inheritTools: true }, ["Read", ...names])).toEqual(["Read"]);
+  });
+
   it("does not hand a delegate nested Task tools", () => {
     const resolved = resolveSubagentToolNames(
       { tools: [...SUBAGENT_ASSIGNABLE_TOOLS], inheritTools: true },

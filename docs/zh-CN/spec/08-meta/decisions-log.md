@@ -5688,3 +5688,23 @@ Markdown 源码，不是 `text/html` 负载；对禁用行内 HTML 的外部编�
 - `pnpm test:e2e:startup-animation` 用生成的 VP9 片段启动真实应用，断言源码检查无法
   覆盖的部分：Chromium 能在页面 CSP 下解码经 `pi-startup:` 提供的字节、播放会推进、
   渐显会交出可交互的主界面，以及不可播放的文件会在约一秒内交出主界面而不是占住窗口。
+
+
+## Native workspace session collaboration
+
+User-approved [native workspace tools](/adr/workspace-session-messaging)
+add scoped session discovery, bounded history reads, directed messages and bound
+phase reports over the D409 ledger. New native ordinary messages default to no
+callback; native delegation defaults to a report back to its initiator. Existing
+plugin defaults, independent fork snapshots and Host permission ownership stay
+unchanged. Busy targets queue messages; agent messages are not human steering or
+authorization. This does not restore the withdrawn general A2A broker.
+
+## Conversation-wide external filesystem consent
+
+The user clarified that local/personal SSH explicit reads should work outside
+the workspace. One explicit UI confirmation authorizes subsequent broad external
+changes for the conversation/subagents on that Host. The Host keeps this scope
+separate from per-tool grants; Auto cannot skip initial consent. Remote runner
+approval is carried only in the owner-side request, not model args. See
+[the ADR](/adr/external-filesystem-conversation-consent).

@@ -100,36 +100,29 @@ storage, Target and network-interception methods remain denied.
   audit writes; verified by the no-secret-leak smoke check
 - Error messages must not echo full keys
 
-## 4. Workspace sandbox
+## 4. Workspace and explicit filesystem access
 
-- File tools are restricted to the project root by default; an explicit path
-  outside the session workspace and scratch roots requires the host permission
-  decision described in `03-runtime/03-tools-and-permissions.md`
-- Path normalization + root boundary check in host-core
-  (`workspace::tests::blocks_escape` covers escape attempts)
-- Symlink targets outside the root are rejected when detectable unless the
-  explicit path was approved by the host permission layer
+Explicit Read/Glob/Grep may address accessible files outside the project root.
+Host canonicalization, operating-system permissions, ignore rules and independent
+plugin capabilities remain authoritative. External mutation through Write/Edit,
+including structural delete/move destinations, requires one clear conversation/Host
+filesystem-write authorization. Every arbitrary Bash needs that initial consent
+because static text inspection cannot prove its real filesystem effects. Auto and
+ordinary tool grants cannot skip it. After explicit authorization, same-scope
+operations and subagents do not repeatedly prompt. Other sessions and SSH Hosts
+remain separate. Revoke/restart follows existing in-memory session-grant lifecycle.
 
-Plan is not itself the workspace security boundary. Host-core resolves the
-durable session mode for every `tools.execute` call and applies the Plan matrix
-before permission modes, grants, plugin risk, or renderer/sidecar state. Plan
-denies Write/Edit/plugin/unknown tools, while BrowserPreview is the explicit
-read-only UI inspection exception (it reveals bundled `pi.browser` chrome; raw
-CDP plugin tools stay denied in Plan). Bash remains available in Plan: Ask and
-Accept edits prompt, and Auto runs without confirmation and may mutate the
-workspace or scratch directory. The UI must state this tradeoff. `SubmitPlan`
-preserves exact Markdown bytes in a new unique `<workspaceRoot>/.pi/plan/*.md`
-file through host-core, validates the in-root artifact path, computes SHA-256
-and byte size, and only then creates the `plan_approvals` record with
-structured title/question fields. Renderer and sidecar state cannot write or
-replace an artifact.
+Plan is intent, not an OS sandbox: its native Write/Edit/plugin/unknown-tool denials
+remain authoritative before any grant. Bash can mutate after explicit Host-scoped
+consent even in Plan, so no read-only security claim is made. Plan checkpoint files
+remain host-owned, validated and immutable; renderer/model data cannot replace them.
 
-Tools from user-configured MCP servers (`mcp_<serverId>_<tool>`) are never
-low-risk by default: host-core classifies them `medium` and ignores any risk
-level the MCP server declares for itself. `ask` and `accept-edits` require
-approval (an `allow-session` grant covers the same tool name for the rest of
-that session, in memory only), `auto` auto-allows, and Plan/Goal still deny
-them (D640, ADR `mcp-tool-approval-risk`).
+MCP tools retain their independent medium-risk policy and never gain approval from
+native filesystem consent. Plugin manifests, sandbox and permissions are unchanged.
+External read access does not authorize credentials collection or OS escalation.
+See [the decision](../../adr/external-filesystem-conversation-consent.md) and tools
+§4a for the full contract. No public remote endpoint or anonymous filesystem API
+is added; SSH workspace tools remain owner-authenticated.
 
 ## 4.1 Skill market egress
 

@@ -360,3 +360,68 @@ test("spawn without a model key never selects an un opted-in default model (#118
   );
   assert.deepEqual(methodCalls(host, "session.collaboration.spawn"), []);
 });
+
+
+test("native workspace messages use the existing queue without a loaded plugin", async () => {
+  const pending = sessionMessage({ pluginId: "host:workspace-sessions", notifyOnCompletion: false });
+  const admissions = [];
+  const queued = [];
+  const host = createHost("host-1", (method) => {
+    if (method === "session.collaboration.pending") return { messages: [pending] };
+    if (method === "session.collaboration.message") return { message: pending };
+    if (method === "session.collaboration.validateNative") return { ok: true };
+    return {};
+  });
+  const bridge = {
+    queue: { list: () => queued },
+    agentHost: { startTurn: async (_principal, input) => {
+      admissions.push(input);
+      queued.push({ sessionMessageId: pending.id });
+    } },
+  };
+  const { service } = createService({ host, bridge, pluginLoaded: false });
+  await service.drain();
+  await service.drain();
+  assert.equal(admissions.length, 1);
+  assert.equal(admissions[0].admission, "queue");
+  assert.equal(admissions[0].sessionId, "target-session");
+  assert.equal(admissions[0].input.sessionMessageId, pending.id);
+  assert.equal(methodCalls(host, "session.collaboration.validateNative").length, 2);
+  assert.deepEqual(methodCalls(host, "session.collaboration.fail"), []);
+});
+
+test("a native message moved outside its workspace is refused before queue admission", async () => {
+  const pending = sessionMessage({ pluginId: "host:workspace-sessions" });
+  let admitted = false;
+  const host = createHost("host-1", (method) => {
+    if (method === "session.collaboration.pending") return { messages: [pending] };
+    if (method === "session.collaboration.message") return { message: pending };
+    if (method === "session.collaboration.validateNative") {
+      throw Object.assign(new Error("Workspace changed"), { errorCode: "PERMISSION_DENIED" });
+    }
+    return {};
+  });
+  const { service } = createService({ host, pluginLoaded: false, bridge: {
+    queue: { list: () => [] },
+    agentHost: { startTurn: async () => { admitted = true; } },
+  } });
+  await service.drain();
+  assert.equal(admitted, false);
+  assert.equal(methodCalls(host, "session.collaboration.fail")[0].params.error, "PERMISSION_DENIED: Workspace changed");
+});
+
+test("disabled plugins still cannot dispatch their queued messages", async () => {
+  const pending = sessionMessage();
+  const host = createHost("host-1", (method) => {
+    if (method === "session.collaboration.pending") return { messages: [pending] };
+    if (method === "session.collaboration.message") return { message: pending };
+    return {};
+  });
+  const { service } = createService({ host, pluginLoaded: false, bridge: {
+    queue: { list: () => [] },
+    agentHost: { startTurn: async () => { assert.fail("Disabled plugin was dispatched"); } },
+  } });
+  await service.drain();
+  assert.equal(methodCalls(host, "session.collaboration.fail")[0].params.error, "ABORTED: The sending plugin is no longer enabled");
+  assert.deepEqual(methodCalls(host, "session.collaboration.validateNative"), []);
+});

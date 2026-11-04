@@ -2082,6 +2082,10 @@ sklm: {
     tasks: "Görevler",
   },
   permission: {
+    "externalWriteScope": "Geçerli konuşmanın ve alt ajanlarının aşağıda belirtilen bu makinede veya SSH sunucusunda geçerli çalışma alanı dışındaki erişilebilir HER dosyayı değiştirmesine, yazmasına veya silmesine izin verir. Bu tek seferlik yetkilendirme, bu konuşmadaki sonraki Write/Edit/Bash işlemlerini tekrar sormadan kapsar. Diğer konuşmalar için geçerli değildir.",
+    "externalWriteLocalHost": "Hedef: bu makine",
+    "externalWriteRemoteHost": "Hedef: SSH sunucusu",
+    "externalWriteGrant": "Bu konuşma için çalışma alanı dışına erişim izni ver",
     title: "İzin gerekiyor",
     allowPrompt: "<highlight>{{tool}}</highlight> çalıştırılsın mı?",
     allowOnce: "Bir kez izin ver",

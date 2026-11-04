@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import type { PendingPermission } from "../lib/pending-permissions";
+import type { PermissionRequest } from "@pi-desktop/shared";
 import { useAppStore } from "../stores/app-store";
 import { buildToolPresentation } from "../lib/tool-presentation";
 import { ToolDetailBlocks } from "./ToolDetails";
@@ -10,7 +10,7 @@ export function PermissionCard({
   permission,
   queued = 0,
 }: {
-  permission: PendingPermission;
+  permission: PermissionRequest;
   /** Requests waiting behind this one; the user answers them in order. */
   queued?: number;
 }) {
@@ -56,6 +56,9 @@ export function PermissionCard({
     [permission.argsPreview, permission.toolName],
   );
   const risk = (permission.risk || "high") as "low" | "medium" | "high";
+  const externalAccess = permission.externalAccess?.kind === "filesystem-write"
+    ? permission.externalAccess
+    : undefined;
 
   return (
     <section
@@ -82,11 +85,22 @@ export function PermissionCard({
         </div>
       ) : null}
       <div className="permission-card-prompt">
-        <Trans
-          i18nKey="permission.allowPrompt"
-          values={{ tool: permission.toolName }}
-          components={{ highlight: <span className="text-text-primary" /> }}
-        />
+        {externalAccess ? (
+          <>
+            <div>{t("permission.externalWriteScope")}</div>
+            <div>
+              {externalAccess.hostKey !== undefined
+                ? <>{t("permission.externalWriteRemoteHost")} {externalAccess.hostKey}</>
+                : t("permission.externalWriteLocalHost")}
+            </div>
+          </>
+        ) : (
+          <Trans
+            i18nKey="permission.allowPrompt"
+            values={{ tool: permission.toolName }}
+            components={{ highlight: <span className="text-text-primary" /> }}
+          />
+        )}
       </div>
       {permission.reason ? (
         <div className="permission-card-reason">{permission.reason}</div>
@@ -112,19 +126,21 @@ export function PermissionCard({
           {t("permission.deny")}
         </Button>
         <Button
-          variant="secondary"
+          variant={externalAccess ? "primary" : "secondary"}
           disabled={resolving}
           onClick={() => void resolve("allow-session")}
         >
-          {t("permission.allowSession")}
+          {externalAccess ? t("permission.externalWriteGrant") : t("permission.allowSession")}
         </Button>
-        <Button
-          variant="primary"
-          disabled={resolving}
-          onClick={() => void resolve("allow-once")}
-        >
-          {t("permission.allowOnce")}
-        </Button>
+        {!externalAccess ? (
+          <Button
+            variant="primary"
+            disabled={resolving}
+            onClick={() => void resolve("allow-once")}
+          >
+            {t("permission.allowOnce")}
+          </Button>
+        ) : null}
       </div>
     </section>
   );

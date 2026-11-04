@@ -31,6 +31,7 @@ export type RemoteHostAdapterFactory = (record: RemoteHostRecord) => RacpRemoteH
 export type RemoteWorkspaceToolInput = {
   hostKey: string; path: string; sessionId: string; turnId: string;
   toolCallId: string; toolName: string; args: unknown; timeoutMs?: number;
+  allowExternalWrites?: boolean;
   expectedCommandShellId?: string; expectedCommandShellDialect?: string;
 };
 export type BootRemoteHostsOptions = {

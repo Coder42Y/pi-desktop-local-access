@@ -192,3 +192,14 @@ approved/completed，或中断的终端卡。这样的卡可能会保留
 9. 主机重启中断pending/queued/running工作，无重放或陈旧
    操作并在 Agent 中保留已批准的中断会话；没有终端
    重启后需要卡恢复
+
+## Conversation-wide external filesystem confirmation
+
+When Host-issued externalAccess.kind is filesystem-write, show the complete
+conversation/subagent and machine/SSH Host scope. Confirmation grants freedom to
+modify/write/delete any accessible external file and subsequent native external
+operations plus arbitrary Bash on that Host do not prompt again. Offer a clearly
+named allow-session action and deny, not a mislabeled one-file grant. Render the
+Host identity as data. Absent metadata preserves ordinary permission-card actions.
+Metadata survives pending hydration, RACP live events and reconnect. Deny/cancel
+never executes. Another session, Host or plugin never acquires this scope.

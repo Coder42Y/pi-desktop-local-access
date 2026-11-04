@@ -14,6 +14,7 @@ mod projections;
 mod provenance;
 mod repository;
 mod settlement;
+pub mod workspace;
 pub use provenance::{prepare_append, validate_replacement};
 pub use repository::{get, Message};
 pub use settlement::{begin_turn, recover, settle_turn};
@@ -35,7 +36,15 @@ pub(super) fn string<'a>(input: &'a Value, key: &str, limit: usize) -> Result<&'
 fn send_record(db: &Database, input: &Value, target: &str, kind: &str) -> Result<Message> {
     let source = string(input, "sourceSessionId", 256)?;
     let plugin = string(input, "pluginId", 256)?;
-    let content = string(input, "content", 65_536)?;
+    let content = string(
+        input,
+        "content",
+        if plugin == workspace::OWNER_ID {
+            384_256
+        } else {
+            65_536
+        },
+    )?;
     let key = string(input, "idempotencyKey", 256)?;
     let notify = input
         .get("notifyOnCompletion")
@@ -166,7 +175,11 @@ fn spawn(db: &Database, input: &Value) -> Result<Value> {
                 .map(str::to_owned),
             project_path: parent.summary.project_path,
             thinking_level: Some(parent.summary.thinking_level),
-            permission_mode: Some(parent.summary.permission_mode),
+            permission_mode: Some(if plugin == workspace::OWNER_ID {
+                permissions::effective_mode(db, source)?
+            } else {
+                parent.summary.permission_mode
+            }),
             // Delegated workers keep the default tier (ADR 0334).
             fast_mode: false,
         },
@@ -196,6 +209,9 @@ pub fn handle(db: &Database, method: &str, input: &Value) -> Result<Value> {
         }
         "session.collaboration.message" => {
             Ok(json!({"message":get(db,string(input,"messageId",256)?)?}))
+        }
+        "session.collaboration.validateNative" => {
+            workspace::validate_delivery(db, string(input, "messageId", 256)?)
         }
         "session.collaboration.status" => {
             projections::summary(db, string(input, "sessionId", 256)?)

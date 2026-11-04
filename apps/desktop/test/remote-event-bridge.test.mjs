@@ -317,3 +317,25 @@ test("recovery snapshot replaces pending cards, including after renderer reload 
   assert.deepEqual(states[1], states[0]);
   assert.deepEqual(states[2], { kind: "snapshot", sessionId: REMOTE_SESSION_ID, permissions: [], asks: [] });
 });
+
+
+test("external filesystem approval scope survives live events and snapshots and binds the actual SSH Host", () => {
+  const approval = {
+    id: "external-access", sessionId: HOST_SESSION_ID, turnId: "turn-1", kind: "tool",
+    summary: "External filesystem authorization", toolName: "Bash", risk: "high",
+    expiresAt: "2026-09-18T10:30:00.000Z", revision: 1,
+    externalAccess: { kind: "filesystem-write", hostKey: "untrusted-label-from-remote" },
+    allowedDecisions: ["allow-session", "deny"],
+  };
+  const live = collect();
+  live.bridge.handle(makeEnvelope({ kind: "approval.requested", turnId: "turn-1", payload: approval }));
+  assert.deepEqual(live.events[0].payload.event.request.externalAccess,
+    { kind: "filesystem-write", hostKey: HOST_KEY });
+  const restored = collect();
+  restored.bridge.restoreSnapshot(snapshot({ pendingApprovals: [approval], pendingInputs: [] }));
+  const requests = restored.events.flatMap((entry) => entry.payload.permissions ?? []);
+  const eventRequests = restored.events.filter((entry) => entry.payload.event?.type === "tool_permission_request")
+    .map((entry) => entry.payload.event.request);
+  assert.ok([...requests, ...eventRequests].some((request) =>
+    request.externalAccess?.kind === "filesystem-write" && request.externalAccess.hostKey === HOST_KEY));
+});

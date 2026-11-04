@@ -2072,6 +2072,10 @@ sklm: {
     "tasks": "Aufgaben"
   },
   "permission": {
+    "externalWriteScope": "Erlaubt dem aktuellen Gespräch und seinen Subagenten, JEDE zugängliche Datei außerhalb des aktuellen Arbeitsbereichs auf dem unten genannten Rechner oder SSH-Host zu ändern, zu schreiben oder zu löschen. Diese einmalige Autorisierung gilt für nachfolgende Write/Edit/Bash-Aktionen ohne erneute Nachfrage in diesem Gespräch, nicht für andere Gespräche.",
+    "externalWriteLocalHost": "Ziel: dieser Rechner",
+    "externalWriteRemoteHost": "Ziel: SSH-Host",
+    "externalWriteGrant": "Zugriff außerhalb des Arbeitsbereichs für dieses Gespräch erlauben",
     "title": "Berechtigung erforderlich",
     "allowPrompt": "Ausführung von <highlight>{{tool}}</highlight> zulassen?",
     "allowOnce": "Einmal zulassen",

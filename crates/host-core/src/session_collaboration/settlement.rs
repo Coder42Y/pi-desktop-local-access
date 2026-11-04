@@ -32,6 +32,9 @@ pub fn begin_turn(
             "CONFLICT: session message already claimed or settled"
         ));
     }
+    if message.plugin_id == super::workspace::OWNER_ID {
+        super::workspace::require_same_workspace(db, &message.source_session_id, session_id)?;
+    }
     super::permissions::check_target(db, session_id, &message.permission_ceiling)?;
     let turn = sessions::begin_turn(db, session_id, provider, model)?;
     let claimed = db.conn().execute("UPDATE session_collaboration_messages SET status='running',turn_id=?2,updated_at=?3 WHERE id=?1 AND status='queued'",
@@ -48,6 +51,15 @@ pub fn begin_turn(
 
 pub(super) fn callback(db: &Database, message: &Message) -> Result<Option<Message>> {
     if !message.notify_on_completion || message.kind == "completion" {
+        return Ok(None);
+    }
+    if message.plugin_id == super::workspace::OWNER_ID
+        && !super::workspace::delivery_allowed(
+            db,
+            &message.target_session_id,
+            &message.source_session_id,
+        )?
+    {
         return Ok(None);
     }
     let key = format!("completion:{}", message.id);

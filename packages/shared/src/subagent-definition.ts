@@ -117,6 +117,11 @@ export const SUBAGENT_INHERIT_DENY_TOOLS: readonly string[] = [
   "asktool",
   "new_context",
   "ToolSearch",
+  "SessionList",
+  "SessionRead",
+  "SendMessage",
+  "SessionSpawn",
+  "SessionReport",
 ];
 
 /**

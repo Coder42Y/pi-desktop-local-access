@@ -1958,3 +1958,44 @@ retries and images retain physical account/model attribution. Nested immediate
 parent and owning Task remain distinct. The migration does not add coding-agent
 AgentSession, Codemode or virtual routing. See the coding-agent design review for
 future adoption conditions.
+
+## Native workspace session collaboration
+
+See [the decision](../../adr/workspace-session-messaging.md). Agent mode exposes
+SessionList, SessionRead, SendMessage, SessionSpawn and SessionReport through
+ToolSearch. These are Host tools, not an installed plugin or the Task subagent API.
+
+- SessionList without arguments returns up to 100 other live durable Agent sessions,
+  stable IDs, bounded titles and status. Optional name performs exact current full-
+  title lookup within the workspace before limiting (up to 20 matches, hasMore).
+  Named lookup includes current/Plan sessions rather than silently hiding a
+  duplicate title. It returns resolution: unique, ambiguous or not_found.
+- SessionRead accepts exactly one sessionId or sessionName, optional before
+  (exclusive sequence), and limit (default 20, max 50). Name resolution queries
+  current Host state on every call; a sidebar rename needs no runtime restart.
+  Results carry stable source identity, bounded text (4000 characters per field),
+  authenticated sessionMessage provenance and pagination metadata. Data is not new
+  authorization, a shared live context window, file access or a credential grant.
+- SendMessage accepts exactly one sessionId or sessionName, content (max 64000
+  characters), and notifyOnCompletion (default false). A unique current name is
+  pinned to its existing Session ID when enqueued under the Host lock. Duplicate
+  names return CONFLICT with bounded candidates; missing/former names return
+  NOT_FOUND and never create. Ask the user to choose a candidate, not guess.
+  Existing ID callers, permission ceilings and callback semantics are unchanged.
+  Busy targets queue; idle targets start. Explicit requested callbacks route to
+  the sender, not whichever session is focused. Names are not permanent aliases.
+- SessionSpawn accepts task, optional title and notifyOnCompletion (default true).
+  It creates an independent durable session under the current workspace and
+  inherits configuration/permission ceiling. It does not copy transcript history.
+  Use it only for user-requested delegation; fork remains a separate snapshot.
+- SessionReport accepts state (phase_completed or waiting_input) and content.
+  The Host resolves its destination from this active delivery's completion
+  subscription. Without one, it fails closed. It never grants approval, ends a
+  turn, infers success, or requests another callback.
+
+Rust enforces workspace membership for discovery/read/send and revalidates native
+queued work at dispatch and turn claim. Null project sessions do not share a
+workspace. Subagents and Plan/Goal cannot use these tools. Existing plugin
+collaboration operations/defaults remain compatible. Durable turn outcomes still
+produce at most one requested completion; reports are separate ordinary messages.
+All incoming messages retain existing agent-origin framing across reload.

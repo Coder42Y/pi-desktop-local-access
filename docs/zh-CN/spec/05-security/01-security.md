@@ -78,34 +78,29 @@
   审计写入；通过无秘密泄漏烟雾检查验证
 - 错误消息不得回显完整按键
 
-## 4. 工作区沙箱
+## 4. Workspace and explicit filesystem access
 
-- 文件工具默认仅限于项目根目录；明确的路径
-  在会话工作空间之外和临时根目录需要主机权限
-  `03-runtime/03-tools-and-permissions.md` 中描述的决策
-- host-core 中的路径规范化 + 根边界检查
-  （`workspace::tests::blocks_escape` 涵盖逃跑尝试）
-- 根目录之外的符号链接目标在可检测到时会被拒绝，除非
-  显式路径已获得主机权限层批准
+Explicit Read/Glob/Grep may address accessible files outside the project root.
+Host canonicalization, operating-system permissions, ignore rules and independent
+plugin capabilities remain authoritative. External mutation through Write/Edit,
+including structural delete/move destinations, requires one clear conversation/Host
+filesystem-write authorization. Every arbitrary Bash needs that initial consent
+because static text inspection cannot prove its real filesystem effects. Auto and
+ordinary tool grants cannot skip it. After explicit authorization, same-scope
+operations and subagents do not repeatedly prompt. Other sessions and SSH Hosts
+remain separate. Revoke/restart follows existing in-memory session-grant lifecycle.
 
-Plan 本身并不是工作区安全边界。主机核解决了
-每个 `tools.execute` 调用的持久会话模式并应用 Plan 矩阵
-在权限模式、授予、插件风险或 renderer/sidecar 状态之前。 Plan
-拒绝 Write/Edit/plugin/unknown 工具，而 BrowserPreview 是显式的
-只读 UI 检查异常（它打开随应用打包的 `pi.browser` chrome；原始
-CDP 插件工具在 Plan 中仍被拒绝）。 Bash 在 Plan 中仍然可用：询问并
-接受编辑提示，自动运行而无需确认，并且可能会改变
-工作区或临时目录。用户界面必须说明这种权衡。 `SubmitPlan`
-在新的唯一 `<workspaceRoot>/.pi/plan/*.md` 中保留精确的 Markdown 字节
-通过 host-core 文件，验证根内工件路径，计算 SHA-256
-和字节大小，然后才创建 `plan_approvals` 记录
-结构化 title/question 字段。 Renderer 和 sidecar 状态无法写入或
-替换一个工件。
+Plan is intent, not an OS sandbox: its native Write/Edit/plugin/unknown-tool denials
+remain authoritative before any grant. Bash can mutate after explicit Host-scoped
+consent even in Plan, so no read-only security claim is made. Plan checkpoint files
+remain host-owned, validated and immutable; renderer/model data cannot replace them.
 
-用户配置的 MCP 服务器提供的工具（`mcp_<serverId>_<tool>`）默认绝不视为低风险：
-host-core 将其归类为 `medium`，并忽略 MCP 服务器为自身声明的任何风险级别。
-`ask` 和 `accept-edits` 需要审批（`allow-session` 授权在该会话剩余时间内覆盖同一
-工具名，仅保存在内存中），`auto` 自动允许，Plan/Goal 仍然拒绝（D640，ADR `mcp-tool-approval-risk`）。
+MCP tools retain their independent medium-risk policy and never gain approval from
+native filesystem consent. Plugin manifests, sandbox and permissions are unchanged.
+External read access does not authorize credentials collection or OS escalation.
+See [the decision](/adr/external-filesystem-conversation-consent) and tools
+§4a for the full contract. No public remote endpoint or anonymous filesystem API
+is added; SSH workspace tools remain owner-authenticated.
 
 ## 4.1 技能市场出网
 

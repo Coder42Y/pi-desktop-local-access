@@ -1270,6 +1270,24 @@
                 }
               ]
             },
+            "externalAccess": {
+              "type": "object",
+              "required": [
+                "kind"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "const": "filesystem-write"
+                },
+                "hostKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                }
+              },
+              "additionalProperties": false
+            },
             "agentName": {
               "type": "string"
             },
@@ -1523,6 +1541,24 @@
             "const": "high"
           }
         ]
+      },
+      "externalAccess": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "filesystem-write"
+          },
+          "hostKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "additionalProperties": false
       },
       "agentName": {
         "type": "string"

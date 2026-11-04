@@ -2042,6 +2042,10 @@ export const ptBR = {
     tasks: "Tarefas"
   },
   permission: {
+    "externalWriteScope": "Permite que a conversa atual e seus subagentes modifiquem, gravem ou excluam QUALQUER arquivo acessível fora do espaço de trabalho atual nesta máquina ou no host SSH indicado abaixo. Esta autorização única cobre operações posteriores de Write/Edit/Bash sem perguntar novamente durante esta conversa. Não se aplica a outras conversas.",
+    "externalWriteLocalHost": "Destino: esta máquina",
+    "externalWriteRemoteHost": "Destino: host SSH",
+    "externalWriteGrant": "Autorizar acesso fora do espaço de trabalho nesta conversa",
     title: "Permissão necessária",
     allowPrompt: "Permitir a execução de <highlight>{{tool}}</highlight>?",
     allowOnce: "Permitir uma vez",

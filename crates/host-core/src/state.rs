@@ -247,6 +247,36 @@ impl AppState {
         request_id: &str,
         decision: crate::permissions::PermissionDecision,
     ) -> Result<(), String> {
+        let pending = self.permissions.pending_requests(None);
+        if matches!(
+            decision,
+            crate::permissions::PermissionDecision::AllowSession
+        ) {
+            if let Some(request) = pending.iter().find(|p| p.request.request_id == request_id) {
+                if let Some(scope) = &request.request.external_access {
+                    let grants = self
+                        .session_grants
+                        .entry(request.request.session_id.clone())
+                        .or_default();
+                    let key = scope.grant_key();
+                    if !grants.contains(&key) {
+                        grants.push(key);
+                    }
+                    // Called under the AppState mutex: install the grant before
+                    // waking every waiter for exactly this session and host.
+                    for other in &pending {
+                        if other.request.session_id == request.request.session_id
+                            && other.request.external_access.as_ref() == Some(scope)
+                        {
+                            self.permissions
+                                .resolve(&other.request.request_id, decision.clone())?;
+                            self.clear_pending_permission(&other.request.request_id);
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+        }
         let result = self.permissions.resolve(request_id, decision);
         self.clear_pending_permission(request_id);
         result

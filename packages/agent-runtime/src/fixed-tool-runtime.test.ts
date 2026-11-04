@@ -390,3 +390,60 @@ describe("MCP tool selection boundary", () => {
     expect(parseMcpToolNames(["search", "search"])).toEqual(["search"]);
   });
 });
+
+
+describe("workspace session tools through runtime and HTTP/SSE", () => {
+  it("discovers and invokes collaboration tools through the ordinary Host gate", async () => {
+    const names = ["SessionList", "SessionRead", "SendMessage", "SessionSpawn", "SessionReport"];
+    const args: Record<string, Record<string, unknown>> = {
+      SessionList: {}, SessionRead: { sessionId: "B", limit: 2 },
+      SendMessage: { sessionId: "B", content: "Review" },
+      SessionSpawn: { task: "Run tests" },
+      SessionReport: { state: "waiting_input", content: "Which target?" },
+    };
+    const wire = await wireFixture(names.flatMap((name) => [
+      { name: "ToolSearch", args: { query: name } }, { name, args: args[name] },
+    ]));
+    const f = runtimeFixture([], []);
+    try {
+      await f.prompt();
+      expect(f.errors).toEqual([]);
+      expect(f.executed).toEqual(names);
+      for (const name of names) {
+        expect(f.rows.find((row) => row.toolName === name)).toMatchObject({ isError: false });
+      }
+    } finally { await f.runtime.dispose(); await wire.close(); }
+  });
+
+  it("does not expose session mutation tools in Plan mode", async () => {
+    const wire = await wireFixture([]);
+    const f = runtimeFixture([], [], flashProvider(), false, "plan");
+    try {
+      await f.prompt();
+      const declared = wire.requests[0].tools.map((tool) => tool.function.name);
+      expect(declared).not.toContain("SendMessage");
+      expect(declared).not.toContain("SessionSpawn");
+      expect(declared).not.toContain("SessionReport");
+    } finally { await f.runtime.dispose(); await wire.close(); }
+  });
+});
+
+
+it("routes current session names through the live Host gate without spawning", async () => {
+  const wire = await wireFixture([
+    { name: "ToolSearch", args: { query: "SessionList" } },
+    { name: "SessionList", args: { name: "接口排查" } },
+    { name: "ToolSearch", args: { query: "SessionRead" } },
+    { name: "SessionRead", args: { sessionName: "接口排查" } },
+    { name: "ToolSearch", args: { query: "SendMessage" } },
+    { name: "SendMessage", args: { sessionName: "接口排查", content: "Continue" } },
+  ]);
+  const f = runtimeFixture([], []);
+  try {
+    await f.prompt();
+    expect(f.errors).toEqual([]);
+    expect(f.executed).toEqual(["SessionList", "SessionRead", "SendMessage"]);
+    expect(f.rows.find(row => row.toolName === "SendMessage")?.toolArgs).toMatchObject({ sessionName: "接口排查" });
+    expect(f.executed).not.toContain("SessionSpawn");
+  } finally { await f.runtime.dispose(); await wire.close(); }
+});

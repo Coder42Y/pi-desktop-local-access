@@ -69,20 +69,10 @@ pub(super) fn requires_external_permission(
     tool_name: &str,
     args: &Value,
 ) -> bool {
-    matches!(tool_name, "Read" | "Glob" | "Grep" | "Write" | "Edit")
-        && args
-            .get("path")
-            .and_then(Value::as_str)
-            .is_some_and(|path| {
-                root.is_some_and(|root| {
-                    let candidate = if Path::new(path).is_absolute() {
-                        PathBuf::from(path)
-                    } else {
-                        Path::new(root).join(path)
-                    };
-                    !workspace::lexically_inside(Path::new(root), &candidate.to_string_lossy())
-                })
-            })
+    // The owner cannot canonicalize remote symlinks. Conservatively request
+    // broad host consent before every remote mutation, including relative ones.
+    let _ = (root, args);
+    matches!(tool_name, "Write" | "Edit" | "Bash")
 }
 
 fn failure(
@@ -108,6 +98,7 @@ pub(super) async fn execute_remote_tool(
     tx: &mpsc::UnboundedSender<String>,
     p: &ToolsExecuteParams,
     remote: RemoteWorkspace,
+    allow_external_writes: bool,
     mut cancellation: Option<tokio::sync::watch::Receiver<bool>>,
 ) -> tools::ToolsExecuteResult {
     let started = std::time::Instant::now();
@@ -139,6 +130,7 @@ pub(super) async fn execute_remote_tool(
             "requestId": request_id, "sessionId": p.session_id, "turnId": p.turn_id,
             "toolCallId": p.tool_call_id, "toolName": p.tool_name, "args": p.args,
             "remoteWorkspace": remote, "timeoutMs": p.timeout_ms,
+            "allowExternalWrites": allow_external_writes && matches!(p.tool_name.as_str(), "Write" | "Edit" | "Bash"),
             "expectedCommandShellId": p.expected_command_shell_id,
             "expectedCommandShellDialect": p.expected_command_shell_dialect,
         }),
@@ -291,6 +283,14 @@ pub(super) async fn handle(
         ))
         .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"));
     }
+    // Trusted owner-only bridge field; model args never grant authority.
+    let allow_external_writes =
+        params.get("allowExternalWrites").and_then(Value::as_bool) == Some(true);
+    if p.tool_name == "Bash" && !allow_external_writes {
+        return serde_json::to_value(failure(&p, "TOOL_DENIED",
+            "Authorize external filesystem writes for this session and SSH host before running Bash", started))
+            .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"));
+    }
     tools::validate_timeout_ms(p.timeout_ms)
         .map_err(|(code, message)| rpc_err(1002, message, &code))?;
     let (mut cancellation, hashline, shell) = {
@@ -348,7 +348,8 @@ pub(super) async fn handle(
         } else {
             None
         },
-        allow_external_paths: false,
+        allow_external_paths: allow_external_writes
+            || matches!(p.tool_name.as_str(), "Read" | "Glob" | "Grep"),
         hashline: Some(tools::HashlineContext {
             session_id: &p.session_id,
             store: &hashline,
@@ -359,6 +360,10 @@ pub(super) async fn handle(
         result = tools::execute_tool_with_path_access(Some(&root),None,&p.tool_name,&p.args,options) => result,
         _ = wait_for_tool_cancellation(&mut cancellation) => failure(&p,"TOOL_ABORTED","tool aborted",started),
     };
+    if result.error_code.as_deref() == Some("PATH_OUTSIDE_WORKSPACE") {
+        result = failure(&p, "TOOL_DENIED",
+            "Authorize external filesystem writes for this session and SSH host, then retry the operation", started);
+    }
     result.tool_call_id = p.tool_call_id.clone();
     state
         .lock()

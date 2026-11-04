@@ -197,3 +197,14 @@ after a full Host/app restart.
 9. host restart interrupts pending/queued/running work without replay or stale
    action and keeps already-approved interrupted sessions in Agent; no terminal
    card restoration is required after restart
+
+## Conversation-wide external filesystem confirmation
+
+When Host-issued externalAccess.kind is filesystem-write, show the complete
+conversation/subagent and machine/SSH Host scope. Confirmation grants freedom to
+modify/write/delete any accessible external file and subsequent native external
+operations plus arbitrary Bash on that Host do not prompt again. Offer a clearly
+named allow-session action and deny, not a mislabeled one-file grant. Render the
+Host identity as data. Absent metadata preserves ordinary permission-card actions.
+Metadata survives pending hydration, RACP live events and reconnect. Deny/cancel
+never executes. Another session, Host or plugin never acquires this scope.

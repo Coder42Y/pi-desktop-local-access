@@ -10,6 +10,9 @@ import { DESKTOP_PRINCIPAL, type AgentHostBridge } from "../agent-host-bridge";
 import { listReadyPluginModels, parsePluginModelKey } from "../plugin-agent-complete";
 import type { McpControlInvokeInput } from "../mcp-control";
 
+// Reserved Host owner namespace, not a plugin id or a model-supplied identity.
+const BUILTIN_SESSION_OWNER = "host:workspace-sessions";
+
 type Host = { call<T>(method: string, params?: Record<string, unknown>): Promise<T> };
 type Sidecar = { call<T>(method: string, params: Record<string, unknown>): Promise<T> };
 
@@ -128,10 +131,15 @@ export function createSessionCollaborationService(deps: SessionCollaborationDepe
         if (current.status !== "queued") return delivery(current);
         const bridge = deps.getBridge();
         if (!bridge || !deps.getSidecar()) fail("HOST_UNAVAILABLE", "The Agent runtime is unavailable");
+        const native = current.pluginId === BUILTIN_SESSION_OWNER;
+        if (native) {
+          await host.call("session.collaboration.validateNative", { messageId: current.id });
+          checkCurrent(host, signal);
+        }
         if (bridge.queue.list(current.targetSessionId).some((entry) => entry.sessionMessageId === current.id)) {
           return delivery(current);
         }
-        if (!deps.isPluginLoaded(current.pluginId)) fail("ABORTED", "The sending plugin is no longer enabled");
+        if (!native && !deps.isPluginLoaded(current.pluginId)) fail("ABORTED", "The sending plugin is no longer enabled");
         // beginTurn rechecks the persisted authorization ceiling at execution,
         // including when a queued turn resumes after settings have changed.
         await bridge.agentHost.startTurn(DESKTOP_PRINCIPAL, {
@@ -236,6 +244,11 @@ export function createSessionCollaborationService(deps: SessionCollaborationDepe
   }
 
   return {
+    changed(): void {
+      void drain().catch((error: unknown) => {
+        deps.log("Session message drain failed", { error: String(error) });
+      });
+    },
     async invoke(input: McpControlInvokeInput): Promise<unknown> {
       if (input.source !== "plugin" || !input.pluginContext?.pluginId) {
         fail("PERMISSION_DENIED", "Session collaboration requires a trusted plugin context");

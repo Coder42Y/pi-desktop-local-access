@@ -200,25 +200,34 @@ schema 中放宽到 100000000，好让毫秒值先通过校验：超过 21,600 �
   只能通过权限来寻址两个根之外的显式路径
   政策如下；拒绝或未经批准的请求将返回 `TOOL_DENIED`。
 
-### 4a。显式外部路径权限
+### 4a. Explicit outside-path access and conversation consent
 
-显式 `path` 参数在会话工作区之外解析，并且
-刮根是一项单独的功能。主机正常之前检查一下
-低风险自动允许决策：
+Explicit Read/Glob/Grep paths may be outside the session workspace, on the local
+machine or a personal SSH Host. They do not require a filesystem-write grant.
+OS permissions and existing ignore/plugin policies remain authoritative.
 
-- `auto` 允许无卡外部路径；
-- `ask`和`accept-edits`发出普通权限卡；
-- `allow-once` 仅执行当前调用，而 `allow-session` 紧随其后
-  现有的每个工具会话授予范围；
-- 拒绝或取消永远不会执行该操作；
-- 相对 `..` 转义和符号链接转义使用与绝对相同的规则
-  路径；
-- 成功的外部 `..`/`Read`/`Write` 结果携带 `root: "external"`
-  和绝对规范路径；外部 `..`/`Read` 匹配是绝对的
-  因此访问在记录中仍然可见。
+External Write/Edit (including delete/move destinations) and arbitrary Bash need
+one explicit conversation-wide filesystem-write authorization on the current
+machine, even in Auto or with legacy per-tool grants. The UI clearly explains
+broad modification/write/delete access for the conversation and its subagents and
+sends allow-session, or denies without execution. A grant is separate from ordinary
+tool grants and scoped to session plus local/SSH Host identity. Later same-scope
+operations do not ask again; revoke and Host restart follow existing session-grant
+lifetimes. A legacy allow-once decision remains one-call-only, never broadened.
+Plan/Goal tool denials and plugin permissions still win.
 
-该例外仅适用于显式路径参数。它不扩展
-工作区根目录、Bash 的工作目录或任何隐式目录路径。
+Every arbitrary Bash can write outside its working directory; static command text
+is not a security proof. The first Bash therefore requests the same explicit scope.
+Remote mutation also conservatively requests it before execution because the
+local Host cannot canonicalize remote symlinks. The remote runner permits explicit
+reads and requires a trusted owner-side allowExternalWrites flag for external
+mutation/Bash. Model args cannot manufacture that flag.
+
+This does not expand the implicit workspace root or Bash working directory.
+Successful external file results retain canonical absolute paths and root:
+external; external search matches remain absolute. Relative traversal and symlink
+paths use the same canonical validation as absolute paths. See
+[the decision](/adr/external-filesystem-conversation-consent).
 
 ## 4b.会话临时目录 (D114)
 
@@ -551,50 +560,52 @@ MCP 工具调用会显示审批卡片，原因为 "MCP server tool requires appr
 - `allow-always-for-tool`
 - `allow-always-for-command-pattern`
 
-### 权限模式 (D115/D132)
+### Permission Modes (D115/D132)
 
-高风险工具调用如何获得批准由**权限模式**控制：
+How high-risk tool calls get approved is governed by a **permission mode**:
 
-| 模式 | Write/Edit | Bash / 插件工具 |
+| Mode | Write/Edit | Bash / plugin tools |
 |---|---|---|
-| `ask`（默认） | 确认 | 确认 |
-| `accept-edits` | 自动允许 | 确认 |
-| `auto` | 自动允许 | 自动允许 |
+| `ask` (default) | confirm | confirm |
+| `accept-edits` | auto-allow | confirm |
+| `auto` | auto-allow | auto-allow |
 
-显式外部工作空间路径是低风险行的一个例外：它是
-仅在 `auto` 中允许自动； `ask` 和 `accept-edits` 都证实了这一点。
+Explicit external reads are low risk in every mode. External mutation and arbitrary
+Bash require the separate conversation/Host filesystem-write scope before this
+table's ordinary decisions; Auto and tool-name grants cannot skip that consent.
 
-每个工具调用的解析顺序 (host-core `tools.execute`)：
+Resolution order per tool call (host-core `tools.execute`):
 
-1. 会话的持久化 `permission_mode`，除非是 `inherit`
-2. 应用程序设置中的全局 `defaultPermissionMode` (`ask` / `accept-edits` / `auto`)
-3.`ask`
+1. Session's persisted `permission_mode`, unless it is `inherit`
+2. Global `defaultPermissionMode` from app settings (`ask` / `accept-edits` / `auto`)
+3. `ask`
 
-规则：
+Rules:
 
-- 会话值存储在 `sessions.permission_mode` 中
-  （`inherit | ask | accept-edits | auto`，默认 `inherit`，架构 v5）和
-  通过 `session.configure` `permissionMode` 设置。
-- Plan 的硬拒绝胜过 Write/Edit 以及缺少 `planSafeActions` 的插件
-  工具的所有权限模式。 `auto` 无法重新启用隐藏或拒绝的工具。
-- 会话根目录内的低风险工具（`allow-once`/`allow-session`/`deny`）自动允许
-  每种模式都和以前一样。
-- `BrowserPreview` 是显式只读 UI 检查功能，并且是
-  在两种操作模式下均可用。
-- Plan 保留权限模式选择器。 Bash 在 `ask` 下得到确认并且
-  `accept-edits`，并且在 `auto` 下自动允许；因此 Plan 正在规划
-  意图，而不是严格的只读安全配置文件。
-- `allow-session` 赠款继续在 `ask` 下运作，范围仅限于
-  会议；在 `BrowserPreview`/`ask` 下，根本不需要它们。
-- 暂存目录写入 (D114) 在每种模式下都保持无提示。
-- UI：设置→分段全局默认；输入框在中显示每个会话的芯片
-  Agent、Plan 和 Goal 的菜单提供了三种有效模式，无需
-  单独的 global-default/inherit 条目。芯片和选定的菜单项
-  显示有效模式；选择一个项目会存储该显式会话
-  覆盖。现有的继承会话继续通过
-  全局设置，直到用户选择一种模式。
-- 强制执行仅适用于 host-core； sidecar/model 从未被告知
-  模式并且不能影响它。
+- The session value is stored in `sessions.permission_mode`
+  (`inherit | ask | accept-edits | auto`, default `inherit`, schema v5) and
+  set via `session.configure` `permissionMode`.
+- Plan's hard deny wins over every permission mode for Write/Edit and plugin
+  tools that lack `planSafeActions`. `auto` cannot re-enable a hidden or denied tool.
+- Low-risk tools (`Read`/`Glob`/`Grep`) inside the session roots auto-allow in
+  every mode, as before.
+- `BrowserPreview` is an explicit read-only UI inspection capability and is
+  available in both operating modes.
+- Plan retains the permission-mode selector and is planning intent, not a strict
+  read-only security profile. Bash still needs the initial filesystem-write scope;
+  subsequent decisions follow that conversation's explicitly authorized scope.
+- `allow-session` grants continue to work under `ask` and stay scoped to the
+  session; under `accept-edits`/`auto` they are simply never needed.
+- Scratch-directory writes (D114) stay prompt-free in every mode.
+- UI: Settings → segmented global default; composer shows a per-session chip in
+  Agent, Plan, and Goal whose menu offers the three effective modes without a
+  separate global-default/inherit entry. The chip and selected menu item
+  display the effective mode; choosing an item stores that explicit session
+  override. Existing inherited sessions continue to resolve through the
+  global setting until the user chooses a mode.
+- Enforcement lives in host-core only; the sidecar/model is never told the
+  mode and cannot influence it.
+
 
 ## 7. 权限流程
 
@@ -699,22 +710,31 @@ MVP 可以通过写入 SQLite 或日志文件来启动。
 路径规则（§4）、Bash 规则（§5）、权限模式（§6）、操作模式矩阵（§10）
 和审计（§9）保持不变，并针对拥有该调用的会话评估。
 
-**内置定义与用户定义**还可以声明 `permission: inherit | ask | accept-edits |
-auto`（ADR 0089，默认 `inherit`）。使用默认的 `inherit`（包括所有内置定义）时，
-sidecar 不附加覆盖，委托使用会话的有效权限模式；因此父会话为 `auto` 时，明确的
-外部路径也不会再次弹出授权卡。项目定义随仓库一起到来，其 scope 会在解析时被丢弃
-并留下警告，克隆仓库永远不会获得权限升级。只有合格的内置或用户定义显式声明非
-`inherit` scope 时，sidecar 才会附加它，并由 host-core 在该模式下裁决。scope 只是
-权限模式覆盖：契约模式的硬拒绝和外部路径门禁（§4.1）仍然生效；显式
-`accept-edits` 仅自动允许工作区和 scratch 根内的 `Write`/`Edit`，外部路径及其他
-工具仍按其正常审批边界处理。
+A **builtin or user** definition may additionally declare `permission: inherit
+| ask | accept-edits | auto` (ADR 0089, default `inherit`). With the default
+`inherit` (including all builtins), the sidecar attaches no override and the
+delegate uses the session's effective permission mode. Explicit external reads
+need no write grant. External mutation/arbitrary Bash still require the owning
+session's one-time Host-scoped filesystem-write authorization, even in Auto;
+subsequent delegates reuse that explicit grant. A project definition may not declare a scope: it arrives with the
+repository, so its declaration is dropped at parse time with a warning and its
+delegates resolve under the session's effective mode — cloning a repository
+never grants it a permission upgrade. When an eligible builtin or user
+explicitly declares a non-`inherit` scope, the sidecar attaches it to the
+delegate's `tools.execute` calls and host-core resolves each call under that
+mode instead of the session's effective permission mode. The scope is a
+permission-mode override only: the contract modes' hard deny and the
+external-path gate (§4.1) stay in force. `accept-edits` therefore auto-allows
+`Write`/`Edit` inside the workspace and scratch roots, while external paths and
+other tools retain their normal approval behavior.
 
-来自代表的权限请求带有提出请求的代表的姓名，因此
-卡可以说明哪位代表想要通话（请参阅 `04-ux/03-permission-ux.md`
-§6a)。
-会话范围的 `allow-session` 拨款仍按 `toolName` 和每个会话进行：
-一名代表对 `Bash` 的批准适用于整个会议，包括
-家长和其他代表。
+Permission requests from a delegate carry the asking delegate's name, so the
+card can say which delegate wants the call (see `04-ux/03-permission-ux.md`
+§6a).
+Ordinary session grants remain per toolName. The explicit external filesystem-write
+scope is different: it covers native external mutations and arbitrary Bash for the
+owning session and its delegates on the authorized Host. It is neither a plugin
+capability nor a grant to a different session/Host.
 
 在隔离会话（§4e）中，工具包含 `Write` 或 `Edit` 的子代理在自己的 worktree 中运行：
 先为会话的未提交编辑建立检查点，再从会话 worktree 分出分支；它的 `tools.execute`
@@ -755,3 +775,16 @@ sidecar 不附加覆盖，委托使用会话的有效权限模式；因此父会
 ## 图片生成与编辑
 
 `GenerateImages` 是仅供 Agent 使用的高风险能力，可信桌面执行请求前必须由 host-core 授权。即使处于 Auto，Plan/Goal 仍被拒绝。取消、限制和结果语义见[图片生成规格](/zh-CN/spec/03-runtime/21-image-generation)。
+
+## Workspace session tools
+
+Agent mode adds on-demand SessionList / SessionRead (low risk), and SendMessage /
+SessionSpawn / SessionReport (medium risk). They traverse the ordinary Host
+permission gate and validate durable mode/turn, workspace and target authority.
+No model-supplied sender, plugin identity or permission mode is accepted.
+Plan/Goal and subagent scopes fail closed. Native tools do not widen plugin APIs.
+
+Details: [runtime contract](02-agent-runtime.md#native-workspace-session-collaboration)
+and [ADR](/adr/workspace-session-messaging). Busy delivery remains queued,
+not human steering. Automatic callbacks require a subscribed operation and never
+carry human consent.

@@ -2088,6 +2088,10 @@ sklm: {
     tasks: "작업",
   },
   permission: {
+    "externalWriteScope": "현재 대화와 그 하위 에이전트가 아래 표시된 이 컴퓨터 또는 SSH 호스트에서 현재 작업 공간 밖의 접근 가능한 모든 파일을 수정, 쓰기 또는 삭제하도록 허용합니다. 이 일회성 승인은 이 대화에서 이후 Write/Edit/Bash 작업을 다시 묻지 않고 허용하며, 다른 대화에는 적용되지 않습니다.",
+    "externalWriteLocalHost": "대상: 이 컴퓨터",
+    "externalWriteRemoteHost": "대상: SSH 호스트",
+    "externalWriteGrant": "이 대화의 작업 공간 외부 접근 허용",
     title: "권한 필요",
     allowPrompt: "<highlight>{{tool}}</highlight> 실행을 허용할까요?",
     allowOnce: "한 번 허용",
