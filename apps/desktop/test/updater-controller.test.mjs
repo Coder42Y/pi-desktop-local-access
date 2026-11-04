@@ -20,6 +20,8 @@ class FakeUpdater extends EventEmitter {
   downloadStarts = [];
   cancellations = [];
 
+  setFeedURL() {}
+
   async checkForUpdates() {
     this.emit("checking-for-update");
     const info = {
@@ -56,7 +58,8 @@ function createController({ updater, settings = {}, persist = async () => {} }) 
     logger,
     send: (channel, payload) => sent.push({ channel, payload }),
     currentVersion: "0.16.0",
-    platform: "darwin",
+    platform: "win32",
+    distribution: "installed",
     isPackaged: true,
     autoUpdater: updater,
     readUpdateSettings: async () => settings,

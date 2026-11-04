@@ -185,6 +185,8 @@ export const tr = {
     checkForUpdates: "Güncellemeleri denetle…",
   },
   updates: {
+    actionFailed: "Güncelleme işlemi tamamlanamadı. Yeniden deneyin.",
+    checkFailed: "Güncellemeler kontrol edilemedi. Yeniden deneyin veya sürümler sayfasını açın.",
     title: "Güncellemeler",
     desc: "Güncellemeler GitHub Releases’ten indirilir.",
     preferenceTitle: "Güncelleme davranışı",

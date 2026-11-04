@@ -78,11 +78,22 @@ export function useChatFileMenuItems() {
             ],
           }]
         : []),
+      ...(nativeFilesAllowed
+        ? [{
+            id: "reveal-in-folder",
+            label: t("panel.files.reveal"),
+            icon: <IconFolderOpen size={14} />,
+            onSelect: () =>
+              openFileRef(path, baseDir, undefined, {
+                destination: "reveal-in-folder",
+              }),
+          }]
+        : []),
       {
         id: "copy-full-path",
         label: t("chat.copyFullPath"),
         icon: <IconCopy size={14} />,
-        separatorBefore: nativeFilesAllowed && isHtmlFilePath(path),
+        separatorBefore: nativeFilesAllowed,
         onSelect: () => copyFileRef(path, baseDir, "absolute"),
       },
       {

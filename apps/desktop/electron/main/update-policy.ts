@@ -8,7 +8,10 @@ export function supportsAutomaticUpdates(
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
   if (!isPackaged) return false;
-  if (platform === "win32" || platform === "darwin") return true;
+  // This customization is ad-hoc signed, not Developer ID signed/notarized.
+  // Keep discovery, but never hand these Mac packages to Squirrel.Mac.
+  if (platform === "darwin") return false;
+  if (platform === "win32") return true;
   return platform === "linux" && Boolean(env.APPIMAGE);
 }
 

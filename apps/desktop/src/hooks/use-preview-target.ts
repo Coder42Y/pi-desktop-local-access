@@ -91,7 +91,8 @@ export type ResolvedChatFileRef = {
 export type ChatFileOpenDestination =
   | "file-manager"
   | "built-in-browser"
-  | "default-browser";
+  | "default-browser"
+  | "reveal-in-folder";
 
 export type ChatFileOpenOptions = {
   line?: number;
@@ -273,6 +274,18 @@ export function useOpenChatFileRef() {
           (current.workspace?.path ?? null) !== workspacePath ||
           current.activeSessionId !== sessionId
         ) {
+          return;
+        }
+        if (destination === "reveal-in-folder") {
+          if (current.workspace?.remote) {
+            showToast(t("chat.fileManagerOpenFailed"), { variant: "error" });
+            return;
+          }
+          try {
+            await api.fsReveal(resolved.absolutePath, sessionId);
+          } catch {
+            showToast(t("chat.fileManagerOpenFailed"), { variant: "error" });
+          }
           return;
         }
         if (destination === "file-manager") {

@@ -1,4 +1,6 @@
 provider: github
-owner: vastsa
-repo: PI-Desktop
+owner: Coder42Y
+repo: pi-desktop-local-access
+channel: local
+private: false
 updaterCacheDirName: '@pi-desktopdesktop-updater'

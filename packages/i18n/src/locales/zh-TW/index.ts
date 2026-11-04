@@ -178,6 +178,8 @@ export const zhTW = {
     checkForUpdates: "檢查更新…",
   },
   updates: {
+    actionFailed: "更新操作未完成，請重試。",
+    checkFailed: "暫時無法檢查更新，請重試或前往發佈頁。",
     title: "軟體更新",
     desc: "更新通過 GitHub Releases 分發。",
     preferenceTitle: "更新方式",

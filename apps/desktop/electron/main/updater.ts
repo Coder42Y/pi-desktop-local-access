@@ -2,9 +2,10 @@
  * App auto-update via electron-updater against GitHub Releases.
  *
  * The feed (latest*.yml + installers) is attached to each GitHub Release by
- * .github/workflows/release.yml. Discovery always tracks the latest stable
- * release (`allowPrerelease = false`) so RC installs still graduate to newer
- * stables. Delivery mode per install:
+ * the release workflow. This customization tracks only the anonymous `local`
+ * prerelease channel in Coder42Y/pi-desktop-local-access, never upstream.
+ * Ad-hoc macOS builds use notify + link until native automatic installation
+ * is qualified. Other delivery modes per install:
  *  - Windows NSIS / Linux AppImage / packaged macOS → full in-app flow: silent
  *    background download, "restart to update" prompt, install-on-quit fallback.
  *  - Windows ZIP / legacy portable (`piDistribution = "zip"` or
@@ -51,6 +52,14 @@ import {
   type WindowsDistribution,
 } from "./update-policy";
 import { ManualUpdateReminderTracker } from "./manual-update-reminder";
+import { LocalUpdateProvider } from "./local-update-provider";
+import {
+  CUSTOM_UPDATE_FEED,
+  CUSTOM_RELEASES_URL,
+  safeUpdateDiagnostic,
+  updateFailureMessage,
+  updateGuardMessage,
+} from "./custom-update";
 
 export { resolveUpdateMode } from "./update-policy";
 export type { WindowsDistribution } from "./update-policy";
@@ -72,7 +81,7 @@ function createRelocatedUpdater(
   return platform === "win32" ? new RelocatedNsisUpdater(baseCachePath) : null;
 }
 
-export const RELEASES_URL = "https://github.com/vastsa/PI-Desktop/releases/latest";
+export const RELEASES_URL = CUSTOM_RELEASES_URL;
 
 const AUTO_CHECK_INITIAL_DELAY_MS = 15_000;
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -178,7 +187,7 @@ export class AppUpdaterController {
         "updater",
         "warn",
         "packaged distribution metadata unavailable",
-        { data: { detail: String(error) } },
+        { data: { detail: safeUpdateDiagnostic(error) } },
       );
       return undefined;
     }
@@ -311,7 +320,7 @@ export class AppUpdaterController {
         }
       } catch (error) {
         this.logger.app("updater", "warn", "update preferences unavailable", {
-          data: { detail: String(error) },
+          data: { detail: safeUpdateDiagnostic(error) },
         });
         if (preferenceRevision === this.preferenceRevision) {
           this.applyPreference("manual", false);
@@ -326,7 +335,7 @@ export class AppUpdaterController {
     if (decision.persist && this.persistLastNotifiedVersion) {
       void this.persistLastNotifiedVersion(version).catch((error) => {
         this.logger.app("updater", "warn", "manual update reminder persistence failed", {
-          data: { detail: String(error), version },
+          data: { detail: safeUpdateDiagnostic(error), version },
         });
       });
     }
@@ -429,7 +438,7 @@ export class AppUpdaterController {
     );
     this.dismissedVersionPersistence = write.catch((error: unknown) => {
       this.logger.app("updater", "warn", "update dismissal persistence failed", {
-        data: { detail: String(error), version },
+        data: { detail: safeUpdateDiagnostic(error), version },
       });
     });
     return this.dismissedVersionPersistence;
@@ -460,30 +469,34 @@ export class AppUpdaterController {
     // Do not let cached updates download or install before Host preferences load.
     this.autoUpdater.autoDownload = false;
     this.autoUpdater.autoInstallOnAppQuit = false;
-    // electron-updater defaults allowPrerelease=true when the installed
-    // version has a prerelease component (e.g. 0.2.0-rc.6). That pins the
-    // GitHub provider to the same custom channel ("rc") and never offers a
-    // newer stable release such as 0.2.2. Always track GitHub's latest
-    // stable release so RC installs can graduate to stable.
-    this.autoUpdater.allowPrerelease = false;
+    // The custom channel uses semver tags vX.Y.Z-local.N, not local-vX.Y.Z-N.
+    // private:false ignores GH_TOKEN/GITHUB_TOKEN; no credentials enter the app.
+    this.autoUpdater.setFeedURL({
+      provider: "custom",
+      updateProvider: LocalUpdateProvider,
+    });
+    this.autoUpdater.channel = CUSTOM_UPDATE_FEED.channel;
+    this.autoUpdater.allowPrerelease = true;
+    // Setting channel implicitly enables downgrades in electron-updater.
+    this.autoUpdater.allowDowngrade = false;
     // Only automatic mode may install on quit; manual mode never hands an
     // installer a no-install/portable directory.
     this.autoUpdater.logger = {
       info: (m: unknown) =>
         this.logger.app("updater", "info", "updater diagnostic", {
-          data: { detail: String(m) },
+          data: { detail: safeUpdateDiagnostic(m) },
         }),
       warn: (m: unknown) =>
         this.logger.app("updater", "warn", "updater diagnostic", {
-          data: { detail: String(m) },
+          data: { detail: safeUpdateDiagnostic(m) },
         }),
       error: (m: unknown) =>
         this.logger.app("updater", "error", "updater diagnostic", {
-          data: { detail: String(m) },
+          data: { detail: safeUpdateDiagnostic(m) },
         }),
       debug: (m: unknown) =>
         this.logger.app("updater", "debug", "updater diagnostic", {
-          data: { detail: String(m) },
+          data: { detail: safeUpdateDiagnostic(m) },
         }),
     };
 
@@ -567,9 +580,18 @@ export class AppUpdaterController {
     this.autoUpdater.on("error", (error: Error) => {
       // Auto checks fail quietly (offline, private repo, rate limits);
       // the renderer only surfaces errors when `manual` is set.
-      this.logger.app("updater", "warn", "updater error", { data: String(error) });
-      this.setState({ status: "error", error: error.message });
+      this.reportFailure(error);
     });
+  }
+
+  /** Only localized text and allowlisted codes may cross IPC or reach logs. */
+  private reportFailure(error: unknown, action = false): Error {
+    const message = updateFailureMessage(this.getLocale(), action);
+    this.logger.app("updater", "warn", "updater error", {
+      data: { code: safeUpdateDiagnostic(error) },
+    });
+    this.setState({ status: "error", error: message });
+    return new Error(message);
   }
 
   private setState(patch: Partial<UpdateState>) {
@@ -597,7 +619,7 @@ export class AppUpdaterController {
   async check(options: { manual?: boolean } = {}): Promise<UpdateState> {
     await this.ensureSettingsLoaded();
     if (this.state.mode === "disabled") {
-      throw new Error("updates are disabled in development builds");
+      throw new Error(updateGuardMessage(this.getLocale(), "disabled"));
     }
     if (
       this.state.status === "checking" ||
@@ -625,8 +647,7 @@ export class AppUpdaterController {
         (error as { code?: unknown } | null)?.code === UPDATE_CHECK_TIMEOUT_CODE;
       if (timedOut) {
         if (this.manualRequested) {
-          this.setState({ status: "error", error: "update check timed out" });
-          throw error;
+          throw this.reportFailure(error);
         }
         // Auto checks fail quietly. Drop "checking" so a 60s GitHub hang
         // cannot skip the next interval or freeze Settings on a spinner.
@@ -638,9 +659,10 @@ export class AppUpdaterController {
         }
         return this.state;
       }
-      // The 'error' listener already recorded state; rethrow for manual
-      // callers so the invoke rejects and the UI can toast it.
-      if (options.manual) throw error;
+      // A provider may reject without emitting an error. Always settle state,
+      // and never let the original transport error escape through IPC.
+      const safeError = this.reportFailure(error);
+      if (options.manual) throw safeError;
     }
     return this.state;
   }
@@ -648,12 +670,16 @@ export class AppUpdaterController {
   /** Explicit download for in-app installs when a check was manual-only. */
   async download(): Promise<UpdateState> {
     if (this.state.mode !== "in-app") {
-      throw new Error("in-app download is not supported on this install");
+      throw new Error(updateGuardMessage(this.getLocale(), "unsupported"));
     }
     if (this.state.status === "downloading" || this.state.status === "downloaded") {
       return this.state;
     }
-    await this.autoUpdater.downloadUpdate();
+    try {
+      await this.autoUpdater.downloadUpdate();
+    } catch (error) {
+      throw this.reportFailure(error, true);
+    }
     return this.state;
   }
 
@@ -671,13 +697,18 @@ export class AppUpdaterController {
   /** Quit and install a downloaded update (in-app mode). */
   install(): void {
     if (this.state.mode !== "in-app" || this.state.status !== "downloaded") {
-      throw new Error("no downloaded update to install");
+      throw new Error(updateFailureMessage(this.getLocale(), true));
     }
     // Marked before the call: quitAndInstall spawns the installer itself, so
     // the shutdown handler must already know this quit is the update restart.
     this.installRequested = true;
     // Fires 'before-quit' first, so host/sidecar shutdown still runs.
-    this.autoUpdater.quitAndInstall(false, true);
+    try {
+      this.autoUpdater.quitAndInstall(false, true);
+    } catch (error) {
+      this.installRequested = false;
+      throw this.reportFailure(error, true);
+    }
   }
   /** Adopt legacy NSIS cache files before the first update check. */
   reclaimRelocatedUpdateCache(): Promise<void> {
@@ -688,7 +719,11 @@ export class AppUpdaterController {
   async openReleases(): Promise<void> {
     const url = parseAllowedExternalUrl(RELEASES_URL);
     if (!url) throw new Error("DISALLOWED_EXTERNAL_URL");
-    await shell.openExternal(url);
+    try {
+      await shell.openExternal(url);
+    } catch (error) {
+      throw this.reportFailure(error, true);
+    }
   }
 
   /**

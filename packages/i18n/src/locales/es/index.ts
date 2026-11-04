@@ -176,6 +176,8 @@ export const es = {
     "checkForUpdates": "Buscar actualizaciones…"
   },
   "updates": {
+    actionFailed: "No se pudo completar la acción de actualización. Inténtalo de nuevo.",
+    checkFailed: "No se pudieron buscar actualizaciones. Inténtalo de nuevo o visita la página de versiones.",
     "title": "Actualizaciones",
     "desc": "Las actualizaciones se descargan de las versiones de GitHub.",
     "preferenceTitle": "Comportamiento de actualización",

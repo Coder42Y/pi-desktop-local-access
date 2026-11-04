@@ -176,6 +176,8 @@ export const fr = {
     "checkForUpdates": "Rechercher les mises à jour…"
   },
   "updates": {
+    actionFailed: "Impossible de terminer la mise à jour. Réessayez.",
+    checkFailed: "Impossible de vérifier les mises à jour. Réessayez ou consultez la page des versions.",
     "title": "Mises à jour",
     "desc": "Les mises à jour sont téléchargées à partir des versions de GitHub.",
     "preferenceTitle": "Mode de mise à jour",

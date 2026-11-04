@@ -6338,6 +6338,24 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 - **Status**: Unit-covered (`auto-update.test.mjs` asserts
   `allowPrerelease = false`); packaged discovery scenario Draft
 
+#### E2E-UPDATE-custom-public-local-channel (NEXT-001)
+
+- Supersedes E2E-067A's stable-channel expectation for this custom distribution only.
+- Path: Settings/menu check -> Main controller -> actual GitHub provider -> local
+  semver tag -> platform metadata -> available -> custom release link.
+- Saved Automatic preference on ad-hoc macOS remains manual; no download,
+  install-on-quit or explicit installer execution. Channel assignment must not
+  enable downgrade. Current version is 0.21.0-local.2; older tags remain archives.
+- Failure/retry: event and rejection-only errors settle state and reject only
+  localized safe text. All updater logger levels retain fixed diagnostic
+  categories, never raw headers/cookies/tokens/URLs. Retry can discover a version.
+- Metadata: builder-generated local-mac.yml matches version, contained regular
+  artifact paths, architecture, size and SHA-512; malformed/corrupt artifacts fail.
+- Automated: custom-update-delivery.test.mjs, custom-update-provider.test.mjs,
+  update-preference.test.mjs and scripts/check-custom-update-release.test.mjs.
+- Server coverage does not qualify native macOS packaging/installation. One
+  manual bootstrap from local.1 is required; packaged discovery remains NOT RUN.
+
 #### E2E-067B: Shipped-locale update notes and full changelog dialog (D164/D345/D349)
 
 - **Preconditions**: The shipped `packages/shared` CHANGELOG contains aligned
@@ -19506,3 +19524,24 @@ their separate platform acceptance.
 - **Native acceptance**: After installing the custom package, click an external
   `.eml` link and check the host preview, then use OS open/reveal. This remains
   pending until a package is built and installed.
+
+### E2E-CHAT-FINDER-REVEAL: Reveal a referenced file from its context menu
+
+- **Steps**: Right-click a local transcript file link, including a non-HTML
+  external installer whose path contains spaces. Select Reveal in Finder. Repeat
+  with a shorthand, a markdown dot-relative reference, a missing file, a native
+  reveal failure, and a session switch while resolution is pending. Check HTML
+  menus retain their Open with submenu and copy actions. Inspect a remote file's
+  menu and an HTTP link's menu.
+- **Expected**: Local file menus include the existing localized folder-reveal
+  label and shared folder icon. Selecting it resolves the actual file before
+  sending its absolute path and owner session ID to `fsReveal`. No file preview,
+  browser, plugin or default app opens. Missing and native-failure cases report
+  existing localized errors. A stale view does nothing. Remote file menus do
+  not offer local reveal and remote-workspace reveal requests are refused.
+  Existing HTTP-link menus are unchanged.
+- **Automation**: `node --test test/chat-file-open-with-menu.test.mjs` from
+  `apps/desktop` executes the real menu and opening hooks with recorded native
+  API calls. `local-file-access.test.mjs` separately verifies the real reveal
+  IPC handler, including external files and remote denials. Native Finder window
+  clicking is not performed by these fixtures.

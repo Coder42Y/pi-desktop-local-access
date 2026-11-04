@@ -4,4 +4,11 @@ export const app = {
   isPackaged: false,
 };
 
-export const shell = { openExternal: async () => undefined };
+export const shell = {
+  opened: [],
+  failure: null,
+  openExternal: async (url) => {
+    shell.opened.push(url);
+    if (shell.failure) throw shell.failure;
+  },
+};

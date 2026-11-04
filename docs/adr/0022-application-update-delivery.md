@@ -14,6 +14,17 @@ not appropriate: unsigned macOS packages cannot provide a qualified in-app
 upgrade lane, while Windows NSIS and Linux AppImage support electron-updater's
 download-and-install flow.
 
+## Customization amendment (NEXT-001)
+
+The following decision list describes the upstream distribution. For Coder42Y's
+customized candidate it is superseded by the fixed anonymous public GitHub
+`local` channel and manual-only ad-hoc macOS delivery documented in
+[Custom update delivery](../project/CUSTOM-UPDATE-DELIVERY.md). The user approved
+public visibility rather than embedding client GitHub authorization. Tags use
+`vX.Y.Z-local.N`; `allowPrerelease = true`, channel `local`, downgrade disabled.
+No architecture, persistence ownership or renderer URL-input contract changes.
+Raw updater diagnostics are replaced with fixed categories and localized errors.
+
 ## Decision
 
 1. Electron Main exclusively owns `electron-updater`, the fixed GitHub

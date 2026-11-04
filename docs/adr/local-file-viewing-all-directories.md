@@ -1,7 +1,10 @@
 # ADR: All-directory local file viewing in a private build
 
 - Status: Accepted for the user-requested local build only
-- Context: A user explicitly requested unrestricted local-directory viewing after an absolute `Desktop/secmanus-smoke/paypal-lookalike.eml` link was rejected outside the project. The user approved source changes, tests and local macOS packaging.
+
+## Context
+
+A user explicitly requested unrestricted local-directory viewing after an absolute `Desktop/secmanus-smoke/paypal-lookalike.eml` link was rejected outside the project. The user approved source changes, tests and local macOS packaging.
 
 ## Decision
 

@@ -172,3 +172,15 @@ test("cache maintenance reads the packaged updater name, adopts baselines, then 
     assert.equal(logs[0][2], "adopted the relocated update cache");
   });
 });
+
+test("cache configuration failure omits private filesystem details from updater logs", async () => {
+  const logs = [];
+  const maintenance = new UpdateCacheMaintenance({
+    resourcesPath: "/synthetic-private-token/missing-resources",
+    activeBasePath: "/synthetic-private-cache", legacyBasePath: null,
+    logger: { app: (...args) => logs.push(args) },
+  });
+  await maintenance.discardDownloadedInstaller();
+  assert.ok(logs.length > 0);
+  assert.doesNotMatch(JSON.stringify(logs), /synthetic-private/);
+});

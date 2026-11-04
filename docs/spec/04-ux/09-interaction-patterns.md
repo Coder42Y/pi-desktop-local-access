@@ -1915,3 +1915,20 @@ plugin. No project is required for an exact absolute local reference.
 Disk roots are containment-only. They must not enter shorthand search, project
 indexing, the local attachment-store detector, remote dispatch, plugin scopes or
 agent tool permissions. This local customization is not an upstream default.
+
+### Reveal transcript files in Finder
+
+The shared conversation file context menu includes a native folder-reveal action
+for local eligible references (including non-HTML files and external installers).
+It uses `panel.files.reveal` (“Reveal in Finder” / “在 Finder 中显示”), the shared
+folder icon, and a separator before the existing copy actions. All transcript
+surfaces sharing this menu receive the action; HTTP menus are unchanged.
+
+Selecting reveal resolves the reference first, including shorthand and markdown
+base-directory handling, then calls `fsReveal` with the absolute result and owner
+session ID. It opens the native containing folder and selects the file; it does
+not open the default application or a plugin view. Missing files report the
+existing reference error; native failures report the existing file-manager
+error. Stale session/project requests are cancelled. Remote references do not
+offer this action and remote-workspace destinations cannot invoke local reveal.
+No new IPC, plugin permission or file containment behavior is introduced.

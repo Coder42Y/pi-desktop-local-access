@@ -185,6 +185,8 @@ export const ko = {
     checkForUpdates: "업데이트 확인…",
   },
   updates: {
+    actionFailed: "업데이트 작업을 완료할 수 없습니다. 다시 시도하세요.",
+    checkFailed: "업데이트를 확인할 수 없습니다. 다시 시도하거나 릴리스 페이지를 방문하세요.",
     title: "업데이트",
     desc: "업데이트는 GitHub Releases에서 다운로드됩니다.",
     preferenceTitle: "업데이트 방식",

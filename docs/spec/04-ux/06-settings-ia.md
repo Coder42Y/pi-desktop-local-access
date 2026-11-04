@@ -967,6 +967,17 @@ system while preserving their different data ownership:
   continues, and a newer version clears the dismissal and resumes automatic
   delivery.
 
+### Customized-build update policy
+
+For Coder42Y's customized distribution, the fixed public source is
+`Coder42Y/pi-desktop-local-access`, channel `local`, with prerelease tags
+`vX.Y.Z-local.N`. No client credentials or upstream fallback are permitted.
+Ad-hoc macOS builds are manual-only regardless of a previously saved Automatic
+preference. Checks and reminders remain enabled; View release opens the custom
+repository's releases list (not `/latest`, which excludes prereleases).
+Failures show localized retry guidance without raw transport details. See
+[custom update runbook](../../project/CUSTOM-UPDATE-DELIVERY.md).
+
 ## 3. Navigation rules
 
 - Profile footer / command palette open Settings full page (default General)

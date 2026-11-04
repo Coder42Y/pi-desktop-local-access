@@ -178,6 +178,8 @@ export const zhCN = {
     checkForUpdates: "检查更新…",
   },
   updates: {
+    actionFailed: "更新操作未完成，请重试。",
+    checkFailed: "暂时无法检查更新，请重试或前往发布页。",
     title: "软件更新",
     desc: "更新通过 GitHub Releases 分发。",
     preferenceTitle: "更新方式",
