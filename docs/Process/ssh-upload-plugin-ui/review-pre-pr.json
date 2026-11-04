@@ -1,0 +1,9 @@
+{
+  "slug": "ssh-upload-plugin-ui",
+  "verdict": "pass",
+  "critical_count": 0,
+  "informational_count": 0,
+  "critical": [],
+  "informational": [],
+  "summary": "Single read-only review found no concrete blocker; isolated UI and workflow checks passed. Native/live acceptance remains unverified."
+}
