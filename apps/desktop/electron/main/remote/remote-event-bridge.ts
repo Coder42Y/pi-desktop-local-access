@@ -101,6 +101,7 @@ function extractInputRequest(payload: unknown): RacpInputRequest | undefined {
 function toToolPermissionRequest(
   remoteSessionId: string,
   approval: RacpApprovalRequest,
+  hostKey: string,
 ): ToolPermissionRequest {
   return {
     // Stateless approval id encoding — see backend-router.ts.
@@ -113,6 +114,7 @@ function toToolPermissionRequest(
     argsPreview: null,
     risk: approval.risk ?? "medium",
     reason: approval.summary,
+    ...(approval.externalAccess ? { externalAccess: { kind: "filesystem-write" as const, hostKey } } : {}),
     ...(approval.agentName ? { agentName: approval.agentName } : {}),
     ...(approval.parentToolCallId ? { parentToolCallId: approval.parentToolCallId } : {}),
     ...(approval.nestedParentToolCallId ? { nestedParentToolCallId: approval.nestedParentToolCallId } : {}),
@@ -265,7 +267,7 @@ export function createRemoteEventBridge(options: RemoteEventBridgeOptions): Remo
         if (!remember(state, `approval:${approval.id}`)) return;
         emitAgentEvent(envelope, remoteSessionId, {
           type: "tool_permission_request",
-          request: toToolPermissionRequest(remoteSessionId, approval),
+          request: toToolPermissionRequest(remoteSessionId, approval, hostKey),
         });
         return;
       }
@@ -334,7 +336,7 @@ export function createRemoteEventBridge(options: RemoteEventBridgeOptions): Remo
       const remoteSessionId = remoteIdOf(sessionId);
       emitInteractions({ kind: "snapshot", sessionId: remoteSessionId,
         permissions: snapshot.pendingApprovals.filter(item => item.sessionId === sessionId && item.kind === "tool")
-          .map(item => toToolPermissionRequest(remoteSessionId, item)),
+          .map(item => toToolPermissionRequest(remoteSessionId, item, hostKey)),
         asks: snapshot.pendingInputs.filter(item => item.sessionId === sessionId)
           .map(item => toAskToolRequest(remoteSessionId, item)),
       });

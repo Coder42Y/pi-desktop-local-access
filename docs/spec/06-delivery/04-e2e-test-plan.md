@@ -19565,3 +19565,146 @@ their separate platform acceptance.
   API calls. `local-file-access.test.mjs` separately verifies the real reveal
   IPC handler, including external files and remote denials. Native Finder window
   clicking is not performed by these fixtures.
+
+
+### E2E-SESSION-workspace-messaging: Native workspace session communication
+
+- **Preconditions**: Fresh isolated Host data and two local project directories;
+  fixture Agent sessions with explicit Auto permission. No real providers.
+- **Steps**: Begin A; discover B, read B's latest/older history pages; attempt a
+  foreign read/send; send an ordinary message twice with one tool-call ID; claim
+  B's message and attempt an unsubscribed report; spawn a subscribed worker from
+  A, report waiting_input while A is busy, settle the worker twice, then consume
+  both report and completion at A.
+- **Expected**: Scoped bounded results, stable message IDs, foreign access refused,
+  ordinary message has no callback, report targets the initiating A and stays
+  queued during A's turn, one completion and no acknowledgement callback chain.
+  The Host emits collaboration.changed only after durable mutation. Neither
+  active selection nor user Desktop configuration is part of the harness.
+- **Specs**: runtime 02 native workspace collaboration; tools/permissions 03;
+  ADR workspace-session-messaging.
+- **Acceptance**: C conversation, D permissions, F persistence; Process A-01–A-07.
+- **Milestone**: M6+.
+- **Status**: Candidate automation: `pnpm test:e2e:workspace-messaging` (real Rust
+  process and public tools.execute; execution turns driven by the harness).
+  Runtime HTTP/SSE tool discovery/calls: fixed-tool-runtime.test.ts; Main admission
+  and disabled-plugin compatibility: session-collaboration-service.test.mjs.
+  Existing `test:e2e:collaboration` and `test:e2e:session-completion` remain gates.
+
+| Additional traceability | Scenarios |
+|---|---|
+| C / D / F / M6+ — Native workspace session collaboration | E2E-SESSION-workspace-messaging |
+
+
+### E2E-SECURITY-external-filesystem-consent: One explicit conversation/Host grant
+
+- **Preconditions**: Current candidate Host binary; temporary local project and
+  external directory; Auto conversation; no user data or real credentials.
+- **Steps**: Read/search external fixtures; initiate an external Write and prove
+  the file is absent when the approval event arrives; allow-session once; perform
+  subsequent external Edit, Write and Bash; attempt a second-session write; revoke
+  and deny the next operation.
+- **Expected**: Reads do not request write authority. Initial mutation waits even
+  in Auto; one Host-scoped conversation grant covers future external operations
+  and subagents. Other sessions and revoked scopes remain unapproved. Denial never
+  writes. Model args cannot forge the scope or the SSH runner flag.
+- **Specs**: tools §4a, permission UX, security §4, external-filesystem-conversation-consent ADR.
+- **Acceptance**: D permissions/security, E tools, F scoped state; Process E-01–E-06.
+- **Milestone**: maintenance.
+- **Status**: Implemented candidate automation: `pnpm test:e2e:external-filesystem`.
+  `permission-external-access.test.mjs` renders the actual card and clicks grant /
+  deny in a separate Chromium profile, asserting decisions and English/Chinese
+  scope copy. `external_access_tests` covers concurrent pending grants, traversal,
+  symlinks, Host/session isolation and runner-side enforcement.
+
+### E2E-SECURITY-remote-external-filesystem-consent: Admitted SSH workspace relay
+
+- **Preconditions**: Two isolated real Rust Hosts, loopback RACP owner pairing and
+  local SSE model fixture. No real SSH daemon, private server, paid provider or
+  user's running Desktop.
+- **Steps**: Local Agent reads outside the remote workspace; the local UI approval
+  port grants external filesystem access once; Agent runs external Bash, Write and
+  another Bash through the production Main relay and owner-only runner.
+- **Expected**: Exactly one scope prompt; later mutations carry the Host-issued
+  allowExternalWrites flag; reads do not. Provider credentials/configuration do
+  not cross to the remote Host. No remote model/project/session is created and a
+  duplicate execution cannot replay. Native remote approval regression additionally
+  proves default policy accepts the paired owner's external allow-session, rejects
+  non-owner/unpaired callers and returns one result on duplicate responses.
+- **Specs**: remote protocol amendment, security §4, external-access ADR.
+- **Acceptance**: D permissions/security, E tools, F state; Process E-01–E-06.
+- **Milestone**: maintenance.
+- **Status**: Candidate automation `PI_HOST_CORE_BINARY=<candidate>
+  node scripts/e2e-local-agent-remote-tools.mjs`; AgentHost and RACP approval tests.
+  This is not native macOS qualification or a real SSH server acceptance run.
+
+| External access traceability | Scenarios |
+|---|---|
+| D / E / F — External filesystem consent | E2E-SECURITY-external-filesystem-consent, E2E-SECURITY-remote-external-filesystem-consent |
+
+
+### E2E-SESSION-current-name-resolution: Renamed conversations retain identity
+
+- **Preconditions**: Isolated real Host and same-workspace A/B; A remains in one
+  running turn. A different workspace has a conversation with the same new name.
+- **Steps**: Rename B via session.rename (the sidebar's Host RPC); query the exact
+  new name, read by name and send by name. Introduce/remove a same-workspace
+  duplicate; try a missing/former name. Rename B again after enqueueing, then
+  consume its original message by stable ID.
+- **Expected**: Current name resolves immediately without reopening A. Foreign
+  workspace names are not matches. Ambiguity returns CONFLICT/candidates, misses
+  return NOT_FOUND, and neither creates or sends to a guessed session. A queued
+  delivery and its callback relationship keep their original IDs after rename.
+- **Specs**: Native workspace runtime contract; workspace-session-messaging ADR.
+- **Acceptance**: C conversation, D scope, F persistence; Process N-01–N-05.
+- **Milestone**: M6+.
+- **Status**: Automated by test:e2e:workspace-messaging. Native name tests also cover
+  exact Unicode titles, lookup beyond the latest 100 rows, current/Plan duplicates,
+  deletion and ID compatibility. Runtime HTTP/SSE fixture proves name parameters
+  reach the ordinary Host gate without SessionSpawn. No user Desktop or real model.
+
+| Session-name traceability | Scenarios |
+|---|---|
+| C / D / F — Current name, stable Session ID | E2E-SESSION-current-name-resolution |
+
+
+### E2E-SESSION-headless-native-collaboration: Host consumer executes and settles
+
+- **Preconditions**: Real pi-host composition, Rust Host and sidecar; isolated
+  HOME/data/project; loopback SSE model fixture; no user app/server/provider.
+- **Steps**: Coordinator uses native SessionSpawn and SendMessage. Both workers
+  execute a real Read, send phase reports, finish and return requested results.
+- **Expected**: Two workers execute; two phase reports and exactly two completion
+  callbacks appear in the coordinator's persisted history. No acknowledgement
+  chain or accepted-but-unconsumed ledger entry substitutes for execution.
+- **Specs**: native workspace runtime/ADR and schema v28 initiating ceiling.
+- **Acceptance**: C conversation, D authority, F persistence; PR feedback P1/P2/P3.
+- **Milestone**: maintenance.
+- **Status**: `pnpm test:e2e:headless-collaboration`. The same fixture against
+  PR head 1b617c401 app composition fails with zero executed workers/receipts.
+  Native permission RPC tests prove receiver grants, queued grant updates,
+  chains/callbacks, forged metadata and Host changes cannot widen the initiating
+  scope. A nonempty v27 upgrade test preserves records with restrictive NULL.
+  Desktop full-human-queue tests prove native messages AND phase reports remain
+  queued and enqueue once after capacity returns. CI=true permission-card fixture
+  runs actual clicks with a test-child-only Linux sandbox flag; production browser
+  preferences and sandboxing are unchanged.
+
+| PR feedback traceability | Scenarios |
+|---|---|
+| C / D / F — Native consumer and initiating scope | E2E-SESSION-headless-native-collaboration |
+
+
+### E2E-SESSION-delivery-failure-and-fairness
+
+- Fail the final headless transcript append while a worker completion is pending:
+  no successful settlement occurs. Restore storage and drain: the final row lands
+  before exactly one completion receipt. Later session rows retain their order;
+  exhausted Host-unavailable retries remain unacknowledged.
+- Queue 64 blocked native deliveries across busy targets and a later delivery to
+  an idle target. A complete paginated drain reaches the idle target without
+  failing or cancelling the older deliveries. Changing the cursor row to running
+  between pages must not skip the next batch.
+- Coverage: Host Runtime turn-events/turn-persistence tests, Desktop collaboration
+  service tests and Rust session_collaboration pending-page tests. The real
+  headless composition E2E remains the representative successful user path.

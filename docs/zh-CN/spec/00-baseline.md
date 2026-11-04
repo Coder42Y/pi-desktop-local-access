@@ -3,7 +3,7 @@
 > **翻译说明：** 本页是与 [英文源规格](/spec/00-baseline) 一一对应的机器辅助翻译。代码、协议字段和标识符保持原文；如翻译与英文源事实有歧义，以英文版本为准。
 
 
-- 基线版本：`0.4.21`
+- 基线版本：`0.4.23`
 - 日期：`2026-10-04`
 - 状态：`Frozen for implementation details (Plan checkpoint artifact + approval/execution startup fence + protocol v11 + schema v15 + host-owned plugin session import/read/update/delete P0/P1 + selectable shell catalog + icon-free composer prompt row + turn-boundary context checkpoint compaction + session-scoped work panel + pi-owned model metadata + provider/runtime safety + M5 hardening + settings IA + project archive + sidebar organization + app update delivery + three-platform release + Extensions page density and theme-readable actions + custom global UI font)`
 - 语言政策：**英语优先**
@@ -204,3 +204,12 @@
 冻结协议仍为 v9，存储架构仍为 v10。未来的变化
 必须保留自动化 M6 场景 E2E-104 到 E2E-117 或更新
 变更合同前的相关决定记录。
+
+## Baseline 0.4.23: external filesystem consent
+
+The user-approved [external-access decision](/adr/external-filesystem-conversation-consent)
+supersedes blanket outside-path denial and the initial Auto bypass. Explicit reads
+are allowed subject to OS/independent capability rules. External mutation and
+arbitrary Bash need one explicit conversation/Host authorization even in Auto;
+subsequent authorized operations, including subagents, do not repeatedly prompt.
+The grant follows existing session/revoke/restart lifetime, not global trust.

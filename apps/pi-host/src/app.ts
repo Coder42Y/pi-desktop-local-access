@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 
-import { AgentHost, type ApprovalPort } from "@pi-desktop/agent-host";
+import { AgentHost, type ApprovalPort, type Principal } from "@pi-desktop/agent-host";
 import {
   AgentSidecar,
   HostProcess,
@@ -10,6 +10,7 @@ import {
   createHeadlessLaunchResolver,
   createHostQueueStore,
   createHostSessionPort,
+  createSessionCollaborationDelivery,
   listPendingToolRequests,
 } from "@pi-desktop/host-runtime";
 import { DeviceTokenAuthenticator, RacpServer, bindRacpWebSocket, type RacpHostOperations, type WsBinding } from "@pi-desktop/racp";
@@ -91,8 +92,24 @@ export async function startPiHost(config: PiHostConfig, options: { log?: HostLog
     approvals,
     queueStore: createHostQueueStore(getHost),
     localApprovalLifetimeMs: APPROVAL_REQUEST_TIMEOUT_MS,
+    onQueueChange: () => collaboration.changed(),
   });
   const plans = new PlanExecutionDispatcher({ getHost, getSidecar, launch, runtime, log });
+  const collaborationPrincipal: Principal = { subject: "session-collaboration", roles: ["owner"], pairedDevice: true };
+  const collaboration = createSessionCollaborationDelivery({
+    getHost, getSidecar,
+    getBridge: () => ({ agentHost, queue: {
+      list: (sessionId) => agentHost.queueEntries(sessionId),
+      cancelSessionMessage: (sessionId, messageId) => agentHost.cancelSessionMessage(collaborationPrincipal, sessionId, messageId),
+    }, interruptSessionMessage: async (_sessionId, turnId) => { await agentHost.interruptTurn(collaborationPrincipal, turnId); } }),
+    getActiveTurn: (sessionId) => runtime.activeTurnId(sessionId),
+    flushTranscript: () => runtime.flushTranscript(),
+    isPluginLoaded: () => false,
+    isQuitting: () => state.stopping,
+    onChanged: () => {},
+    log: (message, data) => log("warn", message, data),
+    principal: collaborationPrincipal,
+  });
 
   // Every runtime event feeds the module; a settled turn closes it there too.
   const abortingSessions = new Set<string>();
@@ -114,6 +131,9 @@ export async function startPiHost(config: PiHostConfig, options: { log?: HostLog
     } catch (error) {
       log("warn", "agent host end turn failed", { sessionId: info.sessionId, turnId: info.turnId, error: String(error) });
     }
+    if (info.settled) void collaboration.settle(info.sessionId, info.turnId).catch((error: unknown) => {
+      log("warn", "session collaboration settlement failed", { turnId: info.turnId, error: String(error) });
+    });
   });
   const originalAbort = runtime.abort.bind(runtime);
   runtime.abort = async (sessionId, turnId) => {
@@ -144,6 +164,9 @@ export async function startPiHost(config: PiHostConfig, options: { log?: HostLog
       await host.dispose();
       throw error;
     }
+    host.onNotification((method) => {
+      if (state.host === host && method === "session.collaboration.changed") collaboration.changed();
+    });
     runtime.attachHost(host);
     state.sidecar?.setHost(host);
     log("info", "host-core handshake ok", { generation: host.generation });

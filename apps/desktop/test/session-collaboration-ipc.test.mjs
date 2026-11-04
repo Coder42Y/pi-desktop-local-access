@@ -25,6 +25,7 @@ function load(relative, imports, globals = {}) {
 const shared = { ErrorCodes, IPC, IPC_WHITELIST };
 const collaboration = load("../electron/main/services/session-collaboration.ts", {
   "node:crypto": crypto,
+  "@pi-desktop/host-runtime": await import("@pi-desktop/host-runtime"),
   "../agent-host-bridge": {},
   "../plugin-agent-complete": {},
 });

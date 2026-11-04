@@ -285,25 +285,34 @@ seconds (D273 / D329). In-range values, including 600 and 1800, are seconds.
   may address an explicit path outside both roots only through the permission
   policy below; a denied or unapproved request returns `TOOL_DENIED`.
 
-### 4a. Explicit outside-path permission
+### 4a. Explicit outside-path access and conversation consent
 
-An explicit `path` argument that resolves outside the session workspace and
-scratch roots is a separate capability. The host checks it before the normal
-low-risk auto-allow decision:
+Explicit Read/Glob/Grep paths may be outside the session workspace, on the local
+machine or a personal SSH Host. They do not require a filesystem-write grant.
+OS permissions and existing ignore/plugin policies remain authoritative.
 
-- `auto` allows the outside path without a card;
-- `ask` and `accept-edits` emit the ordinary permission card;
-- `allow-once` executes only the current call, while `allow-session` follows
-  the existing per-tool session grant scope;
-- denial or cancellation never executes the operation;
-- relative `..` escapes and symlink escapes use the same rule as absolute
-  paths;
-- successful external `Read`/`Write`/`Edit` results carry `root: "external"`
-  and an absolute canonical path; external `Glob`/`Grep` matches are absolute
-  so the access remains visible in the transcript.
+External Write/Edit (including delete/move destinations) and arbitrary Bash need
+one explicit conversation-wide filesystem-write authorization on the current
+machine, even in Auto or with legacy per-tool grants. The UI clearly explains
+broad modification/write/delete access for the conversation and its subagents and
+sends allow-session, or denies without execution. A grant is separate from ordinary
+tool grants and scoped to session plus local/SSH Host identity. Later same-scope
+operations do not ask again; revoke and Host restart follow existing session-grant
+lifetimes. A legacy allow-once decision remains one-call-only, never broadened.
+Plan/Goal tool denials and plugin permissions still win.
 
-The exception applies only to the explicit path argument. It does not expand
-the workspace root, Bash's working directory, or any implicit directory walk.
+Every arbitrary Bash can write outside its working directory; static command text
+is not a security proof. The first Bash therefore requests the same explicit scope.
+Remote mutation also conservatively requests it before execution because the
+local Host cannot canonicalize remote symlinks. The remote runner permits explicit
+reads and requires a trusted owner-side allowExternalWrites flag for external
+mutation/Bash. Model args cannot manufacture that flag.
+
+This does not expand the implicit workspace root or Bash working directory.
+Successful external file results retain canonical absolute paths and root:
+external; external search matches remain absolute. Relative traversal and symlink
+paths use the same canonical validation as absolute paths. See
+[the decision](../../adr/external-filesystem-conversation-consent.md).
 
 ## 4b. Session scratch directory (D114)
 
@@ -745,8 +754,9 @@ How high-risk tool calls get approved is governed by a **permission mode**:
 | `accept-edits` | auto-allow | confirm |
 | `auto` | auto-allow | auto-allow |
 
-An explicit outside-workspace path is an exception to the low-risk row: it is
-auto-allowed only in `auto`; `ask` and `accept-edits` both confirm it.
+Explicit external reads are low risk in every mode. External mutation and arbitrary
+Bash require the separate conversation/Host filesystem-write scope before this
+table's ordinary decisions; Auto and tool-name grants cannot skip that consent.
 
 Resolution order per tool call (host-core `tools.execute`):
 
@@ -765,9 +775,9 @@ Rules:
   every mode, as before.
 - `BrowserPreview` is an explicit read-only UI inspection capability and is
   available in both operating modes.
-- Plan retains the permission-mode selector. Bash is confirmed under `ask` and
-  `accept-edits`, and is auto-allowed under `auto`; therefore Plan is planning
-  intent, not a strict read-only security profile.
+- Plan retains the permission-mode selector and is planning intent, not a strict
+  read-only security profile. Bash still needs the initial filesystem-write scope;
+  subsequent decisions follow that conversation's explicitly authorized scope.
 - `allow-session` grants continue to work under `ask` and stay scoped to the
   session; under `accept-edits`/`auto` they are simply never needed.
 - Scratch-directory writes (D114) stay prompt-free in every mode.
@@ -895,9 +905,10 @@ session.
 A **builtin or user** definition may additionally declare `permission: inherit
 | ask | accept-edits | auto` (ADR 0089, default `inherit`). With the default
 `inherit` (including all builtins), the sidecar attaches no override and the
-delegate uses the session's effective permission mode. Thus a parent in `auto`
-allows the delegate's explicit external paths without a second authorization
-card. A project definition may not declare a scope: it arrives with the
+delegate uses the session's effective permission mode. Explicit external reads
+need no write grant. External mutation/arbitrary Bash still require the owning
+session's one-time Host-scoped filesystem-write authorization, even in Auto;
+subsequent delegates reuse that explicit grant. A project definition may not declare a scope: it arrives with the
 repository, so its declaration is dropped at parse time with a warning and its
 delegates resolve under the session's effective mode — cloning a repository
 never grants it a permission upgrade. When an eligible builtin or user
@@ -912,9 +923,10 @@ other tools retain their normal approval behavior.
 Permission requests from a delegate carry the asking delegate's name, so the
 card can say which delegate wants the call (see `04-ux/03-permission-ux.md`
 §6a).
-Session-scoped `allow-session` grants are still per `toolName` and per session:
-one delegate's approval of `Bash` applies to the whole session, including the
-parent and other delegates.
+Ordinary session grants remain per toolName. The explicit external filesystem-write
+scope is different: it covers native external mutations and arbitrary Bash for the
+owning session and its delegates on the authorized Host. It is neither a plugin
+capability nor a grant to a different session/Host.
 
 Inside an isolated session (§4e), a delegate whose tools include `Write` or
 `Edit` runs in its own worktree, branched from the session worktree after the
@@ -963,3 +975,26 @@ Naming:
 before the trusted desktop executes the request. Plan/Goal remain denied even
 under Auto. See [image generation](21-image-generation.md) for cancellation,
 limits and result semantics.
+
+## Workspace session tools
+
+Agent mode adds on-demand SessionList / SessionRead (low risk), and SendMessage /
+SessionSpawn / SessionReport (medium risk). They traverse the ordinary Host
+permission gate and validate durable mode/turn, workspace and target authority.
+No model-supplied sender, plugin identity or permission mode is accepted.
+Plan/Goal and subagent scopes fail closed. Native tools do not widen plugin APIs.
+
+Details: [runtime contract](02-agent-runtime.md#native-workspace-session-collaboration)
+and [ADR](../../adr/workspace-session-messaging.md). Busy delivery remains queued,
+not human steering. Automatic callbacks require a subscribed operation and never
+carry human consent.
+
+## Collaboration filesystem ceiling
+
+External scope on a session does not automatically authorize a delegated turn.
+Native execution intersects it with the delivery's persisted initiating scope for
+the destination Host. Missing/legacy scope denies external mutation and arbitrary
+Bash; it is not a request to reuse the receiver's older grant. Actual Host running
+turn identity is authoritative, even when caller turn metadata is absent/forged.
+New sends, spawns, reports and callbacks inherit the restricted ceiling. A later
+ordinary human turn retains its session's own grant.

@@ -832,6 +832,22 @@ describe("AgentHost approvals and inputs", () => {
     expect(approvals.tool).toHaveLength(1);
   });
 
+  it("lets only the paired owner grant scoped external access under default remote policy", async () => {
+    const { host, approvals } = build();
+    host.ingest(envelope("s1", "rt_1", { type: "agent_start" }));
+    host.ingest(envelope("s1", "rt_1", { type: "tool_permission_request", request: {
+      ...permission("external-1").request, externalAccess: { kind: "filesystem-write" },
+    } }));
+    expect(host.pendingApprovals("s1")[0]?.allowedDecisions).toContain("allow-session");
+    const response = { approvalId: "external-1", decision: "allow-session" as const, context: { requestId: "r" } };
+    await expect(host.respondApproval(approver, response)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(host.respondApproval({ ...approver, pairedDevice: true }, response)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    const pairedOwner = { ...owner, pairedDevice: true };
+    expect(await host.respondApproval(pairedOwner, response)).toMatchObject({ status: "resolved", decision: "allow-session" });
+    expect((await host.respondApproval(pairedOwner, response)).alreadyResolved).toBe(true);
+    expect(approvals.tool).toEqual([{ requestId: "external-1", decision: "allow-session" }]);
+  });
+
   it("lets the desktop card settle an approval so a later remote answer is a no-op", async () => {
     const { host, approvals, received } = build();
     host.ingest(envelope("s1", "rt_1", { type: "agent_start" }));

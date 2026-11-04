@@ -223,7 +223,7 @@ async fn workspace_runner_reads_without_creating_remote_project_session_or_provi
 #[tokio::test]
 async fn workspace_bash_requires_matching_shell_and_honors_abort_before_dispatch() {
     let (dir, state, tx, _rx) = fixture();
-    let input = json!({"path":dir.path(),"sessionId":"local-owner","toolCallId":"bash-a","toolName":"Bash","args":{"command":"printf forbidden > should-not-exist"},"expectedCommandShellId":"wrong-shell","expectedCommandShellDialect":"wrong-dialect"});
+    let input = json!({"path":dir.path(),"sessionId":"local-owner","toolCallId":"bash-a","allowExternalWrites":true,"toolName":"Bash","args":{"command":"printf forbidden > should-not-exist"},"expectedCommandShellId":"wrong-shell","expectedCommandShellDialect":"wrong-dialect"});
     let result = handle_request(state.clone(), "tools.workspaceExecute", input, tx.clone())
         .await
         .unwrap();
@@ -310,6 +310,10 @@ async fn approved_remote_write_is_dispatched_only_after_local_permission_resolut
     )
     .unwrap();
     assert_eq!(approval["method"], "permissions.request");
+    assert_eq!(
+        approval["params"]["externalAccess"],
+        json!({"kind":"filesystem-write","hostKey":"host-a"})
+    );
     assert!(state.lock().await.remote_execs.is_empty());
     handle_request(
         state.clone(),
@@ -327,6 +331,7 @@ async fn approved_remote_write_is_dispatched_only_after_local_permission_resolut
     )
     .unwrap();
     assert_eq!(dispatch["method"], "tools.remoteExecute");
+    assert_eq!(dispatch["params"]["allowExternalWrites"], true);
     assert_eq!(dispatch["params"]["args"]["content"], "remote value");
     handle_request(state.clone(),"tools.remoteComplete",json!({"requestId":dispatch["params"]["requestId"],"result":{"ok":true,"content":{"path":"created.txt","root":"workspace"}}}),tx.clone()).await.unwrap();
     assert_eq!(pending.await.unwrap().unwrap()["ok"], true);
@@ -385,4 +390,106 @@ async fn remote_projects_cannot_create_isolated_sessions() {
         .unwrap()
         .len();
     assert_eq!(before, after);
+}
+
+#[tokio::test]
+async fn remote_host_scope_comes_from_binding_and_reuses_explicit_grant_only() {
+    use crate::permissions::external_access::ExternalAccess;
+    let (_dir, state, tx, mut rx) = fixture();
+    let (_path, id) = create(&state, &tx).await;
+    {
+        let mut st = state.lock().await;
+        sessions::configure_session_with_thinking(
+            &st.db,
+            &id,
+            "agent",
+            None,
+            None,
+            None,
+            Some("auto"),
+        )
+        .unwrap();
+        st.session_grants.insert(
+            id.clone(),
+            vec![
+                "Write".into(),
+                "Bash".into(),
+                ExternalAccess::filesystem_write(None).grant_key(),
+                ExternalAccess::filesystem_write(Some("host-b")).grant_key(),
+            ],
+        );
+    }
+    for (index, tool, args) in [
+        (
+            0,
+            "Write",
+            json!({"path":"relative.txt","content":"value","allowExternalWrites":false}),
+        ),
+        (
+            1,
+            "Bash",
+            json!({"command":"printf remote","allowExternalWrites":false}),
+        ),
+        (
+            2,
+            "Read",
+            json!({"path":"/outside.txt","allowExternalWrites":true}),
+        ),
+    ] {
+        let input = json!({"sessionId":id,"toolCallId":format!("scope-{index}"),"toolName":tool,
+            "args":args,"mode":"agent","permissionScope":"auto",
+            "expectedCommandShellId":"bash","expectedCommandShellDialect":"posix"});
+        let pending_state = state.clone();
+        let pending_tx = tx.clone();
+        let mut task = tokio::spawn(async move {
+            handle_request(pending_state, "tools.execute", input, pending_tx).await
+        });
+        let text = tokio::select! {
+            result = &mut task => panic!("tool settled before expected broker/relay notification: {result:?}"),
+            text = tokio::time::timeout(Duration::from_secs(5), rx.recv()) => text.unwrap().unwrap(),
+        };
+        let mut event: Value = serde_json::from_str(&text).unwrap();
+        if index == 0 {
+            assert_eq!(event["method"], "permissions.request");
+            assert_eq!(
+                event["params"]["externalAccess"],
+                json!({"kind":"filesystem-write","hostKey":"host-a"})
+            );
+            assert!(state.lock().await.remote_execs.is_empty());
+            handle_request(
+                state.clone(),
+                "permissions.resolve",
+                json!({"requestId":event["params"]["requestId"],"decision":"allow-session"}),
+                tx.clone(),
+            )
+            .await
+            .unwrap();
+            event = serde_json::from_str(
+                &tokio::time::timeout(Duration::from_secs(5), rx.recv())
+                    .await
+                    .unwrap()
+                    .unwrap(),
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            event["method"], "tools.remoteExecute",
+            "same-host grant must avoid another card"
+        );
+        assert_eq!(event["params"]["allowExternalWrites"], index != 2);
+        assert_eq!(event["params"]["remoteWorkspace"]["hostKey"], "host-a");
+        handle_request(
+            state.clone(),
+            "tools.remoteComplete",
+            json!({"requestId":event["params"]["requestId"],"result":{"ok":true,"content":{}}}),
+            tx.clone(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(task.await.unwrap().unwrap()["ok"], true);
+    }
+    let st = state.lock().await;
+    // One scoped token only; neither the external Write nor Bash grows an
+    // ordinary per-tool grant as a side effect of reuse.
+    assert_eq!(st.session_grants[&id].len(), 5);
 }

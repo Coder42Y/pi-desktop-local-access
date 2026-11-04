@@ -1,6 +1,6 @@
 # PI-Desktop Baseline Freeze
 
-- Baseline Version: `0.4.22`
+- Baseline Version: `0.4.23`
 - Date: `2026-10-08`
 - Status: `Frozen for implementation details (indefinite local permission approvals + Plan checkpoint artifact + approval/execution startup fence + protocol v11 + schema v16 + host-owned plugin session import/read/update/delete P0/P1 + selectable shell catalog + icon-free composer prompt row + turn-boundary context checkpoint compaction + session-scoped work panel + edge-specific work-panel/chat resize ownership + models.dev chat model catalog + provider/runtime safety + M5 hardening + settings IA + project archive + sidebar organization + app update delivery + three-platform release + Extensions page density and theme-readable actions + custom global UI font + ChatGPT-style logical project groups + categorized plugin providers in Add Service)`
 - Language policy: **English-first**
@@ -245,3 +245,12 @@ relevant decision record before changing the contract.
 > D623 / ADR 0064 amends the inline automatic compaction trigger to 90% of
 > the derived hard budget. The hard limit remains the final provider-request
 > guard; no background compaction or storage/protocol change is introduced.
+
+## Baseline 0.4.23: external filesystem consent
+
+The user-approved [external-access decision](/adr/external-filesystem-conversation-consent)
+supersedes blanket outside-path denial and the initial Auto bypass. Explicit reads
+are allowed subject to OS/independent capability rules. External mutation and
+arbitrary Bash need one explicit conversation/Host authorization even in Auto;
+subsequent authorized operations, including subagents, do not repeatedly prompt.
+The grant follows existing session/revoke/restart lifetime, not global trust.

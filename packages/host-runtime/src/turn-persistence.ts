@@ -39,6 +39,7 @@ function isDuplicateMessageIdError(error: unknown): boolean {
 export class TurnPersistence {
   private readonly chains = new Map<string, Promise<void>>();
   private pendingCount = 0;
+  private failed: MessageAppend[] = [];
   private disposed = false;
 
   constructor(
@@ -51,16 +52,20 @@ export class TurnPersistence {
 
   /** Number of appends not yet acknowledged by host-core. */
   size(): number {
-    return this.pendingCount;
+    return this.pendingCount + this.failed.length;
   }
 
-  /** Queue one append behind the session's earlier ones; resolves once it landed or was given up. */
+  /** Queue one append; failed rows stay pending for a later flush. */
   append(entry: MessageAppend): Promise<void> {
     if (this.disposed) return Promise.resolve();
     this.pendingCount += 1;
     const previous = this.chains.get(entry.sessionId) ?? Promise.resolve();
     const run = previous
-      .then(() => this.write(entry))
+      .then(async () => {
+        // Do not persist later rows ahead of an unacknowledged session row.
+        const blocked = this.failed.some((row) => row.sessionId === entry.sessionId);
+        if (blocked || !await this.write(entry)) this.failed.push(entry);
+      })
       .finally(() => {
         this.pendingCount -= 1;
         if (this.chains.get(entry.sessionId) === run) this.chains.delete(entry.sessionId);
@@ -69,18 +74,21 @@ export class TurnPersistence {
     return run;
   }
 
-  /** Wait until every queued append has been attempted. */
+  /** Retry retained rows once, in session order, then await pending appends. */
   async flush(): Promise<void> {
     await Promise.allSettled([...this.chains.values()]);
+    const failed = this.failed;
+    this.failed = [];
+    await Promise.allSettled(failed.map((entry) => this.append(entry)));
   }
 
   dispose(): void {
     this.disposed = true;
   }
 
-  private async write(entry: MessageAppend): Promise<void> {
+  private async write(entry: MessageAppend): Promise<boolean> {
     for (let attempt = 0; ; attempt += 1) {
-      if (this.disposed) return;
+      if (this.disposed) return false;
       const host = this.deps.getHost();
       if (host && (host.isAvailable?.() ?? true)) {
         try {
@@ -89,16 +97,16 @@ export class TurnPersistence {
             ...(entry.usage ? { usage: entry.usage } : { message: entry.message }),
             ...(entry.turnId ? { turnId: entry.turnId } : {}),
           });
-          return;
+          return true;
         } catch (error) {
-          if (isDuplicateMessageIdError(error)) return;
+          if (isDuplicateMessageIdError(error)) return true;
           if (!isHostUnavailable(error)) {
             this.deps.log("warn", "transcript append failed", {
               sessionId: entry.sessionId,
               messageId: entry.message?.id,
               error: String(error),
             });
-            return;
+            return false;
           }
         }
       }
@@ -108,7 +116,7 @@ export class TurnPersistence {
           sessionId: entry.sessionId,
           messageId: entry.message?.id,
         });
-        return;
+        return false;
       }
       await (this.deps.sleep ?? defaultSleep)(delay);
     }

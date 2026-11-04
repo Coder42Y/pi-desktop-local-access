@@ -813,6 +813,7 @@ const { startHost } = createHostRuntime({
   superviseRestart,
   isQuitting: () => mainState.quitting,
   ensureSystemProxyRelay,
+  onSessionCollaborationChanged: sessionCollaboration.changed,
 });
 
 runtimeLifecycle = createRuntimeLifecycle({
@@ -1068,11 +1069,7 @@ registerApplicationStartup({
   bootHostStatus,
   flushPendingApplicationMenuCommands,
   invokeSessionCollaboration: sessionCollaboration.invoke,
-  onSessionQueueChange: () => {
-    void sessionCollaboration.drain().catch((error: unknown) => {
-      logger.app("runtime", "warn", "session callback drain failed", { data: String(error) });
-    });
-  },
+  onSessionQueueChange: sessionCollaboration.changed,
 });
 
 registerShutdownHandlers({

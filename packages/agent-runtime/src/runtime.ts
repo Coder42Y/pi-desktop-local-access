@@ -21,6 +21,7 @@ import { imageGenerationDescription, imageGenerationParameters } from "./image-g
 import { todoWriteDescription, todoWriteParameters } from "./todo-tool.js";
 import { createJevClassifierTool } from "./jev-classifier-tool.js";
 import { scheduledToolParameters, scheduledToolDescriptions } from "./scheduled-tools.js";
+import { sessionToolParameters, sessionToolDescriptions } from "./session-tools.js";
 import { withPiFileOpToolNames } from "./pi-file-ops.js";
 import { remoteMutationIdentity } from "./remote-workspace.js";
 import { randomUUID } from "node:crypto";
@@ -3289,10 +3290,11 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       ? " `path` is workspace-relative, or an absolute path inside the session scratch directory."
       : "";
     const externalPathHint =
-      " An explicit path outside the workspace and session scratch roots requires permission unless the effective mode is Auto.";
+      " Explicit reads outside the workspace are allowed subject to OS permissions and existing ignore rules. Outside-workspace changes and arbitrary shell execution require one explicit conversation-wide filesystem-write authorization for the current local or SSH Host, even in Auto; subsequent authorized changes do not prompt again.";
     const describe = (toolName: string): string => {
       if (toolName === "GenerateImages") return imageGenerationDescription;
       if (scheduledToolDescriptions[toolName]) return scheduledToolDescriptions[toolName];
+      if (sessionToolDescriptions[toolName]) return sessionToolDescriptions[toolName];
       switch (toolName) {
         case "BrowserPreview":
           return "Open an HTML file in PI-Desktop's built-in browser panel. `path` may be relative to a project folder or this session's scratch directory, or an absolute path inside those roots. No project is required for scratch previews. The preview live-reloads on later edits to the file or its sibling assets, so call once per page.";
@@ -3897,7 +3899,8 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
         label: toolName,
         description: describe(toolName),
         parameters: Type.Object(
-          scheduledToolParameters[toolName] ?? parameters[toolName] ?? { command: Type.String() },
+          sessionToolParameters[toolName] ?? scheduledToolParameters[toolName] ?? parameters[toolName] ?? { command: Type.String() },
+          sessionToolParameters[toolName] ? { additionalProperties: false } : {},
         ),
         // Normalizing here, above the write lock, means every consumer below
         // this line — the lock key, the host call, the transcript record — sees
@@ -4003,7 +4006,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
           ]
         : ["Read", "Glob", "Grep", "BrowserPreview", "Bash", "Write", "Edit"];
     if (this.mode === "agent") {
-      tools.push("PluginScaffold", "PluginPack", "GenerateImages", ...Object.keys(scheduledToolParameters));
+      tools.push("PluginScaffold", "PluginPack", "GenerateImages", ...Object.keys(scheduledToolParameters), ...Object.keys(sessionToolParameters));
     }
     const builtins = tools.map(exec);
     for (const tool of builtins) this.builtinTools.add(tool);
