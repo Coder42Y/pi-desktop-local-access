@@ -17,6 +17,7 @@ fn session(db: &Database, title: &str) -> String {
 fn send(db: &Database, source: &str, target: &str, key: &str) -> Message {
     send_record(
         db,
+        &HashMap::new(),
         &json!({"sourceSessionId":source,"pluginId":"pi.session-orchestrator",
         "content":"Review the change","idempotencyKey":key,"notifyOnCompletion":true}),
         target,
@@ -57,6 +58,7 @@ fn sessions_are_reused_and_send_is_idempotent() {
     );
     let mismatch = send_record(
         &db,
+        &HashMap::new(),
         &json!({"sourceSessionId":parent,"pluginId":"pi.session-orchestrator",
         "content":"different","idempotencyKey":"one"}),
         &child,
@@ -105,6 +107,7 @@ fn projections_expose_readable_model_names_and_session_discovery_links() {
 
     let child_summary = handle(
         &db,
+        &HashMap::new(),
         "session.collaboration.status",
         &json!({"sessionId":child}),
     )
@@ -115,6 +118,7 @@ fn projections_expose_readable_model_names_and_session_discovery_links() {
 
     let parent_summary = handle(
         &db,
+        &HashMap::new(),
         "session.collaboration.status",
         &json!({"sessionId":parent}),
     )
@@ -122,7 +126,13 @@ fn projections_expose_readable_model_names_and_session_discovery_links() {
     assert_eq!(parent_summary["createdSessions"][0]["sessionId"], child);
     assert_eq!(parent_summary["createdSessions"][0]["available"], true);
 
-    let listed = handle(&db, "session.collaboration.list", &json!({})).unwrap();
+    let listed = handle(
+        &db,
+        &HashMap::new(),
+        "session.collaboration.list",
+        &json!({}),
+    )
+    .unwrap();
     let sessions = listed["sessions"].as_array().unwrap();
     assert!(sessions.iter().any(|entry| entry["sessionId"] == parent));
     assert!(sessions.iter().any(|entry| entry["sessionId"] == child));
@@ -164,6 +174,7 @@ fn turn_bound_result_and_callback_are_durable_and_exactly_once() {
     assert!(!receipt.notify_on_completion);
     let result = handle(
         &db,
+        &HashMap::new(),
         "session.collaboration.result",
         &json!({"sessionId":child,"messageId":message.id}),
     )
@@ -290,8 +301,8 @@ fn queued_cancellation_keeps_the_session_and_notifies_once() {
     let child = session(&db, "Child");
     let message = send(&db, &parent, &child, "one");
     let input = json!({"sessionId":child,"messageId":message.id,"pluginId":message.plugin_id,"sourceSessionId":parent});
-    handle(&db, "session.collaboration.cancel", &input).unwrap();
-    handle(&db, "session.collaboration.cancel", &input).unwrap();
+    handle(&db, &HashMap::new(), "session.collaboration.cancel", &input).unwrap();
+    handle(&db, &HashMap::new(), "session.collaboration.cancel", &input).unwrap();
     assert_eq!(get(&db, &message.id).unwrap().unwrap().status, "cancelled");
     assert_eq!(
         repository::pending_callbacks(&db, Some(&parent))
@@ -365,6 +376,7 @@ fn deleted_creator_keeps_its_reference_and_reports_it_unavailable() {
 
     let removed = handle(
         &db,
+        &HashMap::new(),
         "session.collaboration.status",
         &json!({"sessionId":child}),
     )
@@ -376,6 +388,7 @@ fn deleted_creator_keeps_its_reference_and_reports_it_unavailable() {
 
     let soft_removed = handle(
         &db,
+        &HashMap::new(),
         "session.collaboration.status",
         &json!({"sessionId":soft_child}),
     )
@@ -398,6 +411,7 @@ fn deleted_message_source_survives_the_ledger_and_reports_an_unavailable_peer() 
 
     let summary = handle(
         &db,
+        &HashMap::new(),
         "session.collaboration.status",
         &json!({"sessionId":child}),
     )

@@ -30,7 +30,8 @@ const pluginAgentComplete = load("../electron/main/plugin-agent-complete.ts", {
 
 const { createSessionCollaborationService } = load("../electron/main/services/session-collaboration.ts", {
   "node:crypto": crypto,
-  "../agent-host-bridge": { DESKTOP_PRINCIPAL: { kind: "desktop" } },
+  "@pi-desktop/host-runtime": await import("@pi-desktop/host-runtime"),
+  "../agent-host-bridge": { DESKTOP_PRINCIPAL: { subject: "desktop", roles: ["owner"], pairedDevice: true } },
   "../plugin-agent-complete": pluginAgentComplete,
 });
 
@@ -424,4 +425,44 @@ test("disabled plugins still cannot dispatch their queued messages", async () =>
   await service.drain();
   assert.equal(methodCalls(host, "session.collaboration.fail")[0].params.error, "ABORTED: The sending plugin is no longer enabled");
   assert.deepEqual(methodCalls(host, "session.collaboration.validateNative"), []);
+});
+
+
+for (const report of [false, true]) test(`a full human queue defers a native ${report ? "phase report" : "message"} until capacity returns`, async () => {
+  const { AgentHost } = await import("@pi-desktop/agent-host");
+  const principal = { subject: "desktop", roles: ["owner"], pairedDevice: true };
+  const pending = sessionMessage({ pluginId: "host:workspace-sessions",
+    ...(report ? { content: JSON.stringify({ state: "phase_completed", content: "Done" }) } : {}),
+  });
+  const failures = [];
+  const host = createHost("host-1", (method, params) => {
+    if (method === "session.collaboration.pending") return { messages: pending.status === "queued" ? [pending] : [] };
+    if (method === "session.collaboration.message") return { message: pending };
+    if (method === "session.collaboration.fail") { failures.push(params); pending.status = "failed"; }
+    return { ok: true };
+  });
+  const runtime = { async prompt() { return { turnId: "human-running" }; }, async stop() { return { requested: true }; },
+    async abort() {}, async respondInput() {} };
+  const agentHost = new AgentHost({ runtime,
+    sessions: { async get(id) { return { id, title: "Target", mode: "agent", permissionMode: "auto", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" }; },
+      async history() { return { items: [], hasMore: false }; } },
+    approvals: { async resolveTool() {}, async resolveContract() {}, async listPendingTools() { return []; } },
+  });
+  await agentHost.start();
+  await agentHost.startTurn(principal, { sessionId: pending.targetSessionId, input: { text: "Human running" }, context: { requestId: "running" } });
+  const humans = [];
+  for (let i = 0; i < 8; i++) humans.push(await agentHost.startTurn(principal, {
+    sessionId: pending.targetSessionId, input: { text: `Human queued ${i}` }, admission: "queue", context: { requestId: `human-${i}` },
+  }));
+  const bridge = { agentHost, queue: { list: (id) => agentHost.queueEntries(id) }, interruptSessionMessage: async () => {} };
+  const { service } = createService({ host, bridge, pluginLoaded: false });
+  await service.drain();
+  assert.equal(pending.status, "queued");
+  assert.deepEqual(failures, []);
+  await agentHost.cancelTurn(principal, humans.at(-1).turn.id);
+  await service.drain();
+  await service.drain();
+  assert.equal(agentHost.queueEntries(pending.targetSessionId).filter(entry => entry.sessionMessageId === pending.id).length, 1);
+  assert.equal(agentHost.queueEntries(pending.targetSessionId).filter(entry => !entry.sessionMessageId).length, 7);
+  assert.deepEqual(failures, []);
 });

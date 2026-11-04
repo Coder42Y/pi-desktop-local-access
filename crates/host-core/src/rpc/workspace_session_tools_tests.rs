@@ -20,7 +20,11 @@ pub(super) fn params(source: &str, name: &str, args: Value) -> crate::tools::Too
     serde_json::from_value(json!({"sessionId":source,"toolCallId":"stable-call", "toolName":name,"args":args,"mode":"plan"})).unwrap()
 }
 pub(super) fn run(db: &Database, source: &str, name: &str, args: Value) -> anyhow::Result<Value> {
-    execute_inner(db, &params(source, name, args))
+    execute_inner(
+        db,
+        &std::collections::HashMap::new(),
+        &params(source, name, args),
+    )
 }
 
 #[test]
@@ -58,10 +62,10 @@ fn workspace_path_and_durable_turn_are_authoritative() {
     .is_err());
     let mut delegated = params(&source, "SessionList", json!({}));
     delegated.delegation_id = Some("fake".into());
-    assert!(execute_inner(&db, &delegated).is_err());
+    assert!(execute_inner(&db, &std::collections::HashMap::new(), &delegated).is_err());
     let mut spoofed = params(&source, "SessionList", json!({}));
     spoofed.turn_id = Some("fake".into());
-    assert!(execute_inner(&db, &spoofed).is_err());
+    assert!(execute_inner(&db, &std::collections::HashMap::new(), &spoofed).is_err());
     let sent = run(
         &db,
         &source,
@@ -519,6 +523,7 @@ fn native_pending_query_and_dispatch_validation_reuse_the_host_ledger() {
     let id = sent["message"]["id"].as_str().unwrap();
     let pending = session_collaboration::handle(
         &db,
+        &std::collections::HashMap::new(),
         "session.collaboration.pending",
         &json!({"sessionId":target}),
     )
@@ -531,6 +536,7 @@ fn native_pending_query_and_dispatch_validation_reuse_the_host_ledger() {
     assert_eq!(
         session_collaboration::handle(
             &db,
+            &std::collections::HashMap::new(),
             "session.collaboration.validateNative",
             &json!({"messageId":id})
         )
@@ -542,6 +548,7 @@ fn native_pending_query_and_dispatch_validation_reuse_the_host_ledger() {
         .unwrap();
     assert!(session_collaboration::handle(
         &db,
+        &std::collections::HashMap::new(),
         "session.collaboration.validateNative",
         &json!({"messageId":id})
     )

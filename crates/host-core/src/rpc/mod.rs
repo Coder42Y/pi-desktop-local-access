@@ -1990,7 +1990,7 @@ async fn handle_request(
         }
         method if method.starts_with("session.collaboration.") => {
             let st = state.lock().await;
-            crate::session_collaboration::handle(&st.db, method, &params)
+            crate::session_collaboration::handle(&st.db, &st.session_grants, method, &params)
                 .map_err(session_collaboration_rpc_err)
         }
         "app.handshake" => {
@@ -4302,6 +4302,10 @@ async fn handle_request(
                         }
                         _ => effective_pm,
                     };
+                    let delivery = crate::session_collaboration::permissions::active_delivery(&st.db, &p.session_id)
+                        .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
+                    let effective_pm = delivery.as_ref().map_or(effective_pm.clone(), |message|
+                        crate::session_collaboration::permissions::restrict_mode(&effective_pm, &message.permission_ceiling).to_owned());
                     // Resolve the tool root from the persisted session instead of
                     // the mutable global workspace. This keeps background turns
                     // isolated when the renderer switches between project tabs.
@@ -4352,6 +4356,14 @@ async fn handle_request(
                                 plan_safe_actions: p.plan_safe_actions.as_deref(),
                             },
                         );
+                    if external_path_permission
+                        && matches!(p.tool_name.as_str(), "Write" | "Edit" | "Bash")
+                        && !crate::session_collaboration::permissions::external_allowed(
+                            &st.db, &p.session_id, remote_workspace.as_ref().map(|r| r.host_key.as_str()))
+                            .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?
+                    {
+                        auto = Some(PermissionDecision::Deny);
+                    }
                     // Write/Edit targeting the session scratch dir (D114) or
                     // visualization dir (D671) never touch the user's project —
                     // skip the prompt only while those roots remain valid.
@@ -4559,11 +4571,17 @@ async fn handle_request(
                         .push(p.tool_name.clone());
                 }
 
-                let external_path_permission = external_path_permission
-                    || matches!(p.tool_name.as_str(), "Read" | "Glob" | "Grep")
-                    || crate::permissions::external_access::has_grant(
-                        &state.lock().await.session_grants, &p.session_id,
-                        remote_workspace.as_ref().map(|r| r.host_key.as_str()));
+                let external_path_permission = {
+                    let st = state.lock().await;
+                    let allowed = crate::session_collaboration::permissions::external_allowed(
+                        &st.db, &p.session_id, remote_workspace.as_ref().map(|r| r.host_key.as_str()))
+                        .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
+                    matches!(p.tool_name.as_str(), "Read" | "Glob" | "Grep")
+                        || (allowed && (external_path_permission
+                            || crate::permissions::external_access::has_grant(
+                                &st.session_grants, &p.session_id,
+                                remote_workspace.as_ref().map(|r| r.host_key.as_str()))))
+                };
 
                 // Admission follows permission so approval waits do not occupy
                 // execution capacity. Keep this permit through review, the
@@ -5050,6 +5068,16 @@ async fn handle_request(
                         })
                 })
                 .unwrap_or_else(|| "ask".into());
+            let delivery =
+                crate::session_collaboration::permissions::active_delivery(&st.db, session_id)
+                    .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?;
+            let effective_pm = delivery.as_ref().map_or(effective_pm.clone(), |message| {
+                crate::session_collaboration::permissions::restrict_mode(
+                    &effective_pm,
+                    &message.permission_ceiling,
+                )
+                .to_owned()
+            });
             let args = params.get("args").cloned().unwrap_or_else(|| json!({}));
             let workspace_path = resolve_tool_workspace_for_call(&st, session_id, &args)?;
             let remote_workspace = remote_tools::session_remote_workspace(&st, session_id)?;
@@ -5067,7 +5095,7 @@ async fn handle_request(
                     &args,
                 )
             };
-            let decision = st
+            let mut decision = st
                 .permissions
                 .evaluate_auto_with_permission_mode_and_risk_and_path(PermissionEvaluationParams {
                     session_id,
@@ -5080,6 +5108,17 @@ async fn handle_request(
                     external_host_key: remote_workspace.as_ref().map(|r| r.host_key.as_str()),
                     plan_safe_actions: plan_safe_actions.as_deref(),
                 });
+            if external_path_permission
+                && matches!(tool_name, "Write" | "Edit" | "Bash")
+                && !crate::session_collaboration::permissions::external_allowed(
+                    &st.db,
+                    session_id,
+                    remote_workspace.as_ref().map(|r| r.host_key.as_str()),
+                )
+                .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?
+            {
+                decision = Some(PermissionDecision::Deny);
+            }
             Ok(json!({
                 "decision": decision,
                 "risk": PermissionManager::tool_risk_with_declared(tool_name, declared_risk),

@@ -29,13 +29,14 @@ pub struct Message {
     pub created_at: String,
     pub updated_at: String,
     pub permission_ceiling: String,
+    pub external_write_ceiling: Option<crate::permissions::external_access::ExternalAccess>,
     #[serde(skip)]
     pub remaining_hops: i64,
 }
 
 pub(super) const SELECT: &str = "SELECT id,plugin_id,source_session_id,source_title,
  target_session_id,target_title,kind,content,status,notify_on_completion,turn_id,
- reply_to_message_id,result,error,created_at,updated_at,remaining_hops,permission_ceiling
+ reply_to_message_id,result,error,created_at,updated_at,remaining_hops,permission_ceiling,external_write_ceiling
  FROM session_collaboration_messages";
 
 pub(super) fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
@@ -58,6 +59,18 @@ pub(super) fn row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Message> {
         updated_at: ms_to_ts(row.get(15)?),
         remaining_hops: row.get(16)?,
         permission_ceiling: row.get(17)?,
+        external_write_ceiling: row
+            .get::<_, Option<String>>(18)?
+            .map(|value| {
+                serde_json::from_str(&value).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        18,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })
+            })
+            .transpose()?,
     })
 }
 
@@ -104,8 +117,8 @@ pub(super) fn insert(db: &Database, message: &Message, key: &str) -> Result<()> 
         "INSERT INTO session_collaboration_messages
         (id,plugin_id,source_session_id,source_title,target_session_id,target_title,kind,content,
          status,notify_on_completion,turn_id,reply_to_message_id,idempotency_key,remaining_hops,
-         result,error,created_at,updated_at,permission_ceiling)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?17,?18)",
+         result,error,created_at,updated_at,permission_ceiling,external_write_ceiling)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?17,?18,?19)",
         params![
             message.id,
             message.plugin_id,
@@ -124,7 +137,12 @@ pub(super) fn insert(db: &Database, message: &Message, key: &str) -> Result<()> 
             message.result,
             message.error,
             now_ms(),
-            message.permission_ceiling
+            message.permission_ceiling,
+            message
+                .external_write_ceiling
+                .as_ref()
+                .map(serde_json::to_string)
+                .transpose()?
         ],
     )?;
     Ok(())

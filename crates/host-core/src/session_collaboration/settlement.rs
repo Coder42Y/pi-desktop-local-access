@@ -102,6 +102,7 @@ pub(super) fn callback(db: &Database, message: &Message) -> Result<Option<Messag
         updated_at: at,
         remaining_hops: message.remaining_hops.saturating_sub(1),
         permission_ceiling: message.permission_ceiling.clone(),
+        external_write_ceiling: message.external_write_ceiling.clone(),
     };
     repository::insert(db, &receipt, &key)?;
     Ok(Some(receipt))

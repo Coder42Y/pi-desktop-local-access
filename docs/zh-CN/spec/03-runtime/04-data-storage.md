@@ -1,4 +1,4 @@
-# 04. 数据存储（架构 v27）
+# 04. 数据存储（架构 v28）
 
 > **翻译说明：** 本页是与 [英文源规格](/spec/03-runtime/04-data-storage) 一一对应的机器辅助翻译。代码、协议字段和标识符保持原文；如翻译与英文源事实有歧义，以英文版本为准。
 
@@ -1212,7 +1212,7 @@ outbox 排空。渲染器侧的停止绝不重写已有已开始回复的转录
 - JSON 列在热路径上盲读（按原样发送到渲染器）；
   任何过滤或求和的内容都是按规则提升的列。
 
-## 7. 版本控制、v7 重置和 v8 到 v27 迁移
+## 7. 版本控制、v7 重置和 v8 到 v28 迁移
 
 - `PRAGMA user_version` 保留模式权限；未来的结构性变化
   再次添加有序的 Rust 迁移 fns，每个都在一个事务中，并带有一个
@@ -1223,7 +1223,7 @@ outbox 排空。渲染器侧的停止绝不重写已有已开始回复的转录
   旧文件中的会话、提供程序和设置不会保留；
   存档仍保留以供手动恢复。所有 v7 之前的迁移代码
   （v1 `settings.sqlite` 导入，v2→v6 链）被删除。
-- 全新安装直接运行完整的 v27 DDL。
+- 全新安装直接运行完整的 v28 DDL。
 - **架构 v15 是增量的。** 它增加 `turn_queue` 表及其两个索引（D386 / ADR 0213），使 Host
   拥有的回合队列在重启后存活；不改动任何已有行，迁移前保留 `pi.sqlite.v14.bak`。
 - **架构 v16 是增量的。** 它增加会话协作 link 和投递表、生命周期索引，以及可为空的
@@ -1476,3 +1476,19 @@ An unknown price is distinct from a known zero price; partial known costs remain
 on the individual operations. Late usage targets its captured turn and does not
 revive it or debit the currently active turn. Immediate nested parent and owning
 Task remain separate optional transcript/event fields.
+
+
+## Delivery filesystem ceiling migration (schema v28)
+
+The v27-to-v28 transaction adds nullable TEXT
+session_collaboration_messages.external_write_ceiling and retains a v27 backup.
+The value is the serialized Host-captured filesystem-write scope with optional
+SSH hostKey; NULL means no external authorization. Legacy rows remain intact and
+receive NULL, never the receiver's existing grant. Invalid persisted scope JSON
+produces an observable storage error rather than an unrestricted default.
+
+Every new delivery/callback retains the initiating ceiling. The actual running
+turn determines its use, and external mutation/arbitrary Bash requires both the
+receiver's own grant and that captured scope for the current Host. Neither queued
+grant updates nor forwarding through another session widens authority. Session
+IDs, history, provider settings and normal human-turn grants are not rewritten.

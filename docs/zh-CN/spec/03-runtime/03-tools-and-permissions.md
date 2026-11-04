@@ -788,3 +788,13 @@ Details: [runtime contract](02-agent-runtime.md#native-workspace-session-collabo
 and [ADR](/adr/workspace-session-messaging). Busy delivery remains queued,
 not human steering. Automatic callbacks require a subscribed operation and never
 carry human consent.
+
+## Collaboration filesystem ceiling
+
+External scope on a session does not automatically authorize a delegated turn.
+Native execution intersects it with the delivery's persisted initiating scope for
+the destination Host. Missing/legacy scope denies external mutation and arbitrary
+Bash; it is not a request to reuse the receiver's older grant. Actual Host running
+turn identity is authoritative, even when caller turn metadata is absent/forged.
+New sends, spawns, reports and callbacks inherit the restricted ceiling. A later
+ordinary human turn retains its session's own grant.

@@ -44,7 +44,7 @@ the initiating authorization ceiling.
 
 ## Consequences
 The official orchestrator remains compatible and optional for native messaging.
-No schema migration is needed: data stays in the existing ledger. Workspace
+Schema v28 additively stores the initiating filesystem scope in the existing ledger; v27 rows retain their data with an unauthorized NULL scope. Workspace
 collaboration is not a shared live model context, file authority, team scheduler,
 broadcast facility, cross-host transport, or an arbitrary session-control API.
 
@@ -74,3 +74,20 @@ requires user selection; missing/former names do not imply creation. Existing
 history, message provenance, fork snapshots and callback bindings are not rewritten
 on rename. No new database schema, lineages, aliases or model-context injection is
 introduced. Tests use the public rename RPC while another conversation stays active.
+
+## PR feedback correction: initiating ceiling and headless delivery
+
+The ledger captures the initiating external filesystem scope and destination Host
+from Host-owned grants, intersecting any incoming delivery ceiling. Queuing, later
+grant changes, chaining, phase reports and callbacks cannot elevate that snapshot.
+Actual durable running-turn identity governs enforcement; caller turn metadata or
+permissionScope cannot select a less restrictive context. A receiver's prior grant
+is not authority for the sender. Reads/in-workspace permitted operations and later
+human turns retain their own policies.
+
+A shared Node consumer in host-runtime drives the existing ledger/admission/queue
+for Desktop and pi-host. Headless composition subscribes to ledger notifications,
+queue changes and successfully persisted terminal turns; completion settlement waits
+for transcript persistence. No second broker or SQLite owner is introduced.
+Accepted native deliveries and phase reports stay pending on AGENT_BUSY and retry
+after queue capacity changes, without duplicate enqueueing or callback chains.

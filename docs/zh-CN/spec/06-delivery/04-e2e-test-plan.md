@@ -10260,3 +10260,30 @@ PluginPack 产物的解包目录，仅用于开发验证。验收 #1711 前需�
 | Session-name traceability | Scenarios |
 |---|---|
 | C / D / F — Current name, stable Session ID | E2E-SESSION-current-name-resolution |
+
+
+### E2E-SESSION-headless-native-collaboration: Host consumer executes and settles
+
+- **Preconditions**: Real pi-host composition, Rust Host and sidecar; isolated
+  HOME/data/project; loopback SSE model fixture; no user app/server/provider.
+- **Steps**: Coordinator uses native SessionSpawn and SendMessage. Both workers
+  execute a real Read, send phase reports, finish and return requested results.
+- **Expected**: Two workers execute; two phase reports and exactly two completion
+  callbacks appear in the coordinator's persisted history. No acknowledgement
+  chain or accepted-but-unconsumed ledger entry substitutes for execution.
+- **Specs**: native workspace runtime/ADR and schema v28 initiating ceiling.
+- **Acceptance**: C conversation, D authority, F persistence; PR feedback P1/P2/P3.
+- **Milestone**: maintenance.
+- **Status**: `pnpm test:e2e:headless-collaboration`. The same fixture against
+  PR head 1b617c401 app composition fails with zero executed workers/receipts.
+  Native permission RPC tests prove receiver grants, queued grant updates,
+  chains/callbacks, forged metadata and Host changes cannot widen the initiating
+  scope. A nonempty v27 upgrade test preserves records with restrictive NULL.
+  Desktop full-human-queue tests prove native messages AND phase reports remain
+  queued and enqueue once after capacity returns. CI=true permission-card fixture
+  runs actual clicks with a test-child-only Linux sandbox flag; production browser
+  preferences and sandboxing are unchanged.
+
+| PR feedback traceability | Scenarios |
+|---|---|
+| C / D / F — Native consumer and initiating scope | E2E-SESSION-headless-native-collaboration |

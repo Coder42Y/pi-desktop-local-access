@@ -500,6 +500,10 @@ export class RuntimeService implements RuntimePort {
     return this.activeTurns.get(sessionId);
   }
 
+  flushTranscript(): Promise<boolean> {
+    return this.events.flushPersistence();
+  }
+
   // -------------------------------------------------------------------------
   // Turn ownership
   // -------------------------------------------------------------------------

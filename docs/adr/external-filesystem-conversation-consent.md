@@ -51,8 +51,9 @@ read access. First remote mutation may prompt even when its spelling is inside t
 workspace. After approval it is not a filesystem sandbox: the user has authorized
 broad writes on that Host. No OS escalation, silent key collection or new plugin
 permission is added. Old runners that cannot accept the optional grant flag must
-be upgraded; no fallback silently bypasses their restrictions. No database
-migration is introduced.
+be upgraded; no fallback silently bypasses their restrictions. Scope grants stay
+in memory; schema v28 separately persists per-delivery initiating scope ceilings
+so receiver grants cannot widen queued or running collaboration work.
 
 The external filesystem approval retains allow-session in its offered decisions
 under the default remote policy. AgentHost permits that decision only to a paired

@@ -1,3 +1,5 @@
+> Historical review of the original PR head; owner feedback fixes are reviewed in pr-feedback-review.md/json.
+
 # Pre-PR independent review
 
 - Repository: Coder42Y/pi-desktop-local-access

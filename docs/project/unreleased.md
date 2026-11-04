@@ -1,5 +1,10 @@
 # Unreleased changes
 
+- Preserve the initiating conversation's filesystem authorization throughout
+  native deliveries, including queued/forwarded work and completion callbacks.
+  Headless Hosts now execute and settle native messaging through the shared
+  consumer; full turn queues defer accepted messages/reports instead of failing.
+
 - Recognize current conversation names after a sidebar rename. Session tools can
   resolve the latest title to the same stable session for context reads/messages
   without reopening the calling conversation. Duplicate names require selection;

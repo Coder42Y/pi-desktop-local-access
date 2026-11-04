@@ -32,7 +32,11 @@ pub fn definitions() -> Vec<Value> {
         "parameters":{"type":"object","additionalProperties":false,"properties":properties,"required":required}})).collect()
 }
 
-fn execute_inner(db: &Database, p: &ToolsExecuteParams) -> Result<Value> {
+fn execute_inner(
+    db: &Database,
+    grants: &std::collections::HashMap<String, Vec<String>>,
+    p: &ToolsExecuteParams,
+) -> Result<Value> {
     if p.delegation_id.is_some() {
         return Err(anyhow!(
             "PERMISSION_DENIED: subagents cannot use workspace session tools"
@@ -49,6 +53,7 @@ fn execute_inner(db: &Database, p: &ToolsExecuteParams) -> Result<Value> {
     }
     workspace::execute(
         db,
+        grants,
         &p.session_id,
         p.turn_id.as_deref(),
         &p.tool_call_id,
@@ -67,7 +72,7 @@ pub async fn execute(
 ) -> ToolsExecuteResult {
     let result = {
         let st = state.lock().await;
-        execute_inner(&st.db, p)
+        execute_inner(&st.db, &st.session_grants, p)
     };
     let (ok, content, error_code) = match result {
         Ok(value) => (true, value, None),

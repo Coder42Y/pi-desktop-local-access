@@ -187,6 +187,7 @@ try {
       await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
       try {
         const child = spawn(chromiumBinary, ["--headless", "--disable-gpu", "--no-first-run",
+          ...(process.platform === "linux" && process.env.CI === "true" ? ["--no-sandbox"] : []),
           "--disable-background-networking", "--dump-dom", "--timeout=20000", "--virtual-time-budget=10000",
           `--user-data-dir=${join(temp, "chromium-profile")}`, `http://127.0.0.1:${server.address().port}/`],
           { stdio: ["ignore", "pipe", "pipe"] });

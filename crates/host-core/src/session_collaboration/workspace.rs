@@ -206,6 +206,7 @@ fn resolve_target(
 
 pub fn execute(
     db: &Database,
+    grants: &std::collections::HashMap<String, Vec<String>>,
     source: &str,
     claimed_turn: Option<&str>,
     call: &str,
@@ -301,8 +302,8 @@ pub fn execute(
             require_same_workspace(db, source, &target)?;
             send(
                 db,
+                grants,
                 source,
-                &turn,
                 &key,
                 &target,
                 &input.content,
@@ -333,6 +334,7 @@ pub fn execute(
             let parent = sessions::session_summary(db, source)?.ok_or_else(denied)?;
             let spawned = super::spawn(
                 db,
+                grants,
                 &json!({"sourceSessionId":source,"sourceTurnId":turn,"pluginId":OWNER_ID,"idempotencyKey":key,
                 "content":input.task,"title":title,"notifyOnCompletion":notify,"providerId":parent.provider_id,"modelId":parent.model_id}),
             )?;
@@ -356,8 +358,8 @@ pub fn execute(
             let content = json!({"state":input.state,"content":input.content}).to_string();
             send(
                 db,
+                grants,
                 source,
-                &turn,
                 &key,
                 &original.source_session_id,
                 &content,
@@ -370,8 +372,8 @@ pub fn execute(
 
 fn send(
     db: &Database,
+    grants: &std::collections::HashMap<String, Vec<String>>,
     source: &str,
-    turn: &str,
     key: &str,
     target: &str,
     content: &str,
@@ -380,7 +382,8 @@ fn send(
     let tx = db.conn().unchecked_transaction()?;
     let message: Message = super::send_record(
         db,
-        &json!({"pluginId":OWNER_ID,"sourceSessionId":source,"sourceTurnId":turn,
+        grants,
+        &json!({"pluginId":OWNER_ID,"sourceSessionId":source,
         "idempotencyKey":key,"content":content,"notifyOnCompletion":notify}),
         target,
         "message",

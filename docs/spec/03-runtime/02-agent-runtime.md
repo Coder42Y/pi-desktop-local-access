@@ -1999,3 +1999,16 @@ workspace. Subagents and Plan/Goal cannot use these tools. Existing plugin
 collaboration operations/defaults remain compatible. Durable turn outcomes still
 produce at most one requested completion; reports are separate ordinary messages.
 All incoming messages retain existing agent-origin framing across reload.
+
+## Native delivery authorization and headless consumption
+
+Delivery filesystem authority is a Host-captured snapshot, not the receiving
+session's stored grant. A delivery cannot borrow a stronger grant, gain authority
+from a queued settings change, forward a broader ceiling, or override it with
+caller turnId/permissionScope. Enforcement resolves the actual durable running
+turn. Ordinary human turns and non-external reads keep their existing authority.
+
+Desktop and pi-host share the host-runtime ledger consumer. The headless app wires
+Host ledger notifications, Agent Host queue changes and terminal settlement after
+transcript persistence. Busy queues leave native messages/reports pending until
+capacity returns. Completion callbacks remain turn-bound and at most once.

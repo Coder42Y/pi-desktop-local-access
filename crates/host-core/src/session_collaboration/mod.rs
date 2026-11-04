@@ -3,13 +3,14 @@
 use anyhow::{anyhow, Result};
 use rusqlite::params;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
     db::{ms_to_ts, now_ms, Database},
     sessions,
 };
-mod permissions;
+pub mod permissions;
 mod projections;
 mod provenance;
 mod repository;
@@ -33,7 +34,13 @@ pub(super) fn string<'a>(input: &'a Value, key: &str, limit: usize) -> Result<&'
     Ok(value)
 }
 
-fn send_record(db: &Database, input: &Value, target: &str, kind: &str) -> Result<Message> {
+fn send_record(
+    db: &Database,
+    grants: &HashMap<String, Vec<String>>,
+    input: &Value,
+    target: &str,
+    kind: &str,
+) -> Result<Message> {
     let source = string(input, "sourceSessionId", 256)?;
     let plugin = string(input, "pluginId", 256)?;
     let content = string(
@@ -109,12 +116,13 @@ fn send_record(db: &Database, input: &Value, target: &str, kind: &str) -> Result
             input.get("sourceTurnId").and_then(Value::as_str),
         )?,
         permission_ceiling,
+        external_write_ceiling: permissions::capture_external_scope(db, grants, source, target)?,
     };
     repository::insert(db, &message, key)?;
     Ok(message)
 }
 
-fn spawn(db: &Database, input: &Value) -> Result<Value> {
+fn spawn(db: &Database, grants: &HashMap<String, Vec<String>>, input: &Value) -> Result<Value> {
     let source = string(input, "sourceSessionId", 256)?;
     let plugin = string(input, "pluginId", 256)?;
     let key = string(input, "idempotencyKey", 256)?;
@@ -185,14 +193,19 @@ fn spawn(db: &Database, input: &Value) -> Result<Value> {
         },
     )?;
     db.conn().execute("INSERT INTO session_collaboration_links(session_id,created_by_session_id,plugin_id,created_at) VALUES(?1,?2,?3,?4)",params![created.id,source,plugin,now_ms()])?;
-    let message = send_record(db, input, &created.id, "task")?;
+    let message = send_record(db, grants, input, &created.id, "task")?;
     tx.commit()?;
     Ok(json!({"sessionId":created.id,"message":message}))
 }
 
-pub fn handle(db: &Database, method: &str, input: &Value) -> Result<Value> {
+pub fn handle(
+    db: &Database,
+    grants: &HashMap<String, Vec<String>>,
+    method: &str,
+    input: &Value,
+) -> Result<Value> {
     match method {
-        "session.collaboration.spawn" => spawn(db, input),
+        "session.collaboration.spawn" => spawn(db, grants, input),
         "session.collaboration.send" => {
             let target = string(input, "sessionId", 256)?;
             let kind = input
@@ -203,7 +216,7 @@ pub fn handle(db: &Database, method: &str, input: &Value) -> Result<Value> {
                 return Err(anyhow!("INVALID_ARGUMENT: invalid message kind"));
             }
             let tx = db.conn().unchecked_transaction()?;
-            let message = send_record(db, input, target, kind)?;
+            let message = send_record(db, grants, input, target, kind)?;
             tx.commit()?;
             Ok(json!({"message":message}))
         }
