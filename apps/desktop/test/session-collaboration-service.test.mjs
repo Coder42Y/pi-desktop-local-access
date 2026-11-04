@@ -466,3 +466,26 @@ for (const report of [false, true]) test(`a full human queue defers a native ${r
   assert.equal(agentHost.queueEntries(pending.targetSessionId).filter(entry => !entry.sessionMessageId).length, 7);
   assert.deepEqual(failures, []);
 });
+
+test("64 busy deliveries do not starve a later ready session", async () => {
+  const blocked = Array.from({ length: 64 }, (_, i) => sessionMessage({
+    id: `busy-${i}`, targetSessionId: `busy-session-${Math.floor(i / 8)}`, pluginId: "host:workspace-sessions",
+  }));
+  const ready = sessionMessage({ id: "ready", targetSessionId: "idle-session", pluginId: "host:workspace-sessions" });
+  const admitted = [];
+  const host = createHost("host", (method, params) => {
+    if (method === "session.collaboration.pending") return params.afterMessageId
+      ? { messages: [ready] } : { messages: blocked, nextCursor: blocked.at(-1).id };
+    if (method === "session.collaboration.message") return { message: [...blocked, ready].find(row => row.id === params.messageId) };
+    return { ok: true };
+  });
+  const { service } = createService({ host, bridge: { queue: { list: () => [] },
+    agentHost: { async startTurn(_principal, input) {
+      if (input.sessionId !== "idle-session") throw Object.assign(new Error("full human queue"), { errorCode: "AGENT_BUSY" });
+      admitted.push(input.input.sessionMessageId);
+    } },
+  } });
+  await service.drain();
+  assert.deepEqual(admitted, ["ready"]);
+  assert.deepEqual(methodCalls(host, "session.collaboration.fail"), []);
+});

@@ -10287,3 +10287,18 @@ PluginPack 产物的解包目录，仅用于开发验证。验收 #1711 前需�
 | PR feedback traceability | Scenarios |
 |---|---|
 | C / D / F — Native consumer and initiating scope | E2E-SESSION-headless-native-collaboration |
+
+
+### E2E-SESSION-delivery-failure-and-fairness
+
+- Fail the final headless transcript append while a worker completion is pending:
+  no successful settlement occurs. Restore storage and drain: the final row lands
+  before exactly one completion receipt. Later session rows retain their order;
+  exhausted Host-unavailable retries remain unacknowledged.
+- Queue 64 blocked native deliveries across busy targets and a later delivery to
+  an idle target. A complete paginated drain reaches the idle target without
+  failing or cancelling the older deliveries. Changing the cursor row to running
+  between pages must not skip the next batch.
+- Coverage: Host Runtime turn-events/turn-persistence tests, Desktop collaboration
+  service tests and Rust session_collaboration pending-page tests. The real
+  headless composition E2E remains the representative successful user path.

@@ -231,9 +231,22 @@ pub fn handle(
         }
         "session.collaboration.list" => projections::list(db),
         "session.collaboration.result" => projections::result(db, input),
-        "session.collaboration.pending" => Ok(
-            json!({"messages":repository::pending_callbacks(db,input.get("sessionId").and_then(Value::as_str))?}),
-        ),
+        "session.collaboration.pending" => {
+            let after = input
+                .get("afterMessageId")
+                .map(|_| string(input, "afterMessageId", 256))
+                .transpose()?;
+            let messages = repository::pending_callbacks(
+                db,
+                input.get("sessionId").and_then(Value::as_str),
+                after,
+            )?;
+            let next_cursor = messages
+                .last()
+                .filter(|_| messages.len() == 64)
+                .map(|message| message.id.clone());
+            Ok(json!({"messages": messages, "nextCursor": next_cursor}))
+        }
         "session.collaboration.fail" => {
             let id = string(input, "messageId", 256)?;
             let tx = db.conn().unchecked_transaction()?;

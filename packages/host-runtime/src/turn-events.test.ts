@@ -116,3 +116,36 @@ describe("usage ledger ingress", () => {
     expect(writes.at(-1)?.params).toMatchObject({ turnId: "old-turn", usage: { operationId: "late" } });
   });
 });
+
+it("does not settle a collaboration turn until its final transcript append succeeds", async () => {
+  const { createSessionCollaborationDelivery } = await import("./session-collaboration-delivery.js");
+  let writable = false;
+  const settled: string[] = [];
+  const host = { async call<T>(method: string, params?: unknown): Promise<T> {
+    if (method === "session.appendMessage" && !writable) throw new Error("disk full");
+    if (method === "session.collaboration.settle") settled.push((params as { turnId: string }).turnId);
+    return (method === "session.collaboration.pending" ? { messages: [] } : {}) as T;
+  } };
+  const pipeline = new TurnEventPipeline({ getHost: () => host,
+    ownership: { activeTurnId: () => "worker-turn", isStaleTerminalEvent: () => false, finishTurn: async () => undefined },
+    emit: () => undefined, log: () => undefined,
+  });
+  const consumer = createSessionCollaborationDelivery({ getHost: () => host, getSidecar: () => null,
+    getBridge: () => null, getActiveTurn: () => undefined, flushTranscript: () => pipeline.flushPersistence(),
+    isPluginLoaded: () => false, isQuitting: () => false, onChanged: () => {}, log: () => {},
+    principal: { subject: "fixture", roles: ["owner"], pairedDevice: true },
+  });
+  pipeline.handle({ sessionId: "worker", turnId: "worker-turn", ts: 1,
+    event: { type: "message_end", message: { id: "final", role: "assistant", content: "Final worker result",
+      createdAt: "2026-11-04T00:00:00Z", status: "complete" } },
+  });
+  await consumer.settle("worker", "worker-turn");
+  expect(settled).toEqual([]);
+  expect(pipeline.pendingWrites()).toBe(1);
+  writable = true;
+  await consumer.drain();
+  await consumer.drain();
+  expect(settled).toEqual(["worker-turn"]);
+  expect(pipeline.pendingWrites()).toBe(0);
+  await pipeline.dispose();
+});

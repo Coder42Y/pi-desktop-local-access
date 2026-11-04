@@ -1359,3 +1359,13 @@ Desktop and pi-host share the host-runtime ledger consumer. The headless app wir
 Host ledger notifications, Agent Host queue changes and terminal settlement after
 transcript persistence. Busy queues leave native messages/reports pending until
 capacity returns. Completion callbacks remain turn-bound and at most once.
+
+
+Failed headless transcript appends remain unacknowledged, including exhausted
+Host-unavailable retries. Later flushes retry them in session order; a completion
+receipt cannot be settled merely because all write attempts finished. The queue
+remains process-memory-only and does not claim crash/power-loss durability.
+
+The internal pending RPC scans stable (created_at, id) pages of 64 and returns an
+optional nextCursor. Consumers pass it as afterMessageId until the scan ends.
+Deferred full queues must not hide a ready destination behind the first page.

@@ -75,3 +75,20 @@ The owner-only SSH preview changes remain included; no published history was rew
 
 The final pushed commit and remote CI status are recorded in the PR response.
 No merge is authorized or performed.
+
+
+## Landing review: persistence acknowledgement and queue fairness
+
+Independent review of 024ecf4 confirmed the original authority/consumer/queue
+fixes, but identified two additional concrete blockers. New regressions failed
+on that head: a discarded final append still settled worker-turn successfully,
+and 64 busy deliveries hid a later ready target. The landing fix retains failed
+appends in memory in session order for later flushes, and adds stable internal
+pending-message pagination. Permissions, existing RPC callers, ledger schema and
+plugin authorization are unchanged. No second broad review is scheduled; verify
+the concrete fixes through their failing regressions and integration candidates.
+
+New checks: Host Runtime full suite 177 passed; Rust collaboration 13 passed;
+Desktop service 19 passed. Candidate hashes, final E2E and remote CI evidence are
+recorded in the PR before merging. Runtime crash/power-loss recovery remains
+outside the in-memory headless persistence contract.

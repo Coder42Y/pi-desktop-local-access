@@ -173,15 +173,24 @@ pub(super) fn latest_incoming(
         .optional()?)
 }
 
-pub fn pending_callbacks(db: &Database, session_id: Option<&str>) -> Result<Vec<Message>> {
+pub fn pending_callbacks(
+    db: &Database,
+    session_id: Option<&str>,
+    after_message_id: Option<&str>,
+) -> Result<Vec<Message>> {
     let mut statement = db.conn().prepare_cached(&format!(
         "{SELECT}
         WHERE (kind='completion' OR plugin_id=?2) AND status='queued'
           AND (?1 IS NULL OR target_session_id=?1)
+          AND (?3 IS NULL OR (created_at,id) >
+            (SELECT created_at,id FROM session_collaboration_messages WHERE id=?3))
         ORDER BY created_at,id LIMIT 64"
     ))?;
     let values = statement
-        .query_map(params![session_id, super::workspace::OWNER_ID], row)?
+        .query_map(
+            params![session_id, super::workspace::OWNER_ID, after_message_id],
+            row,
+        )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(values)
 }

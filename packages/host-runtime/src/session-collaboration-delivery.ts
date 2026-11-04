@@ -180,14 +180,20 @@ export function createSessionCollaborationDelivery(deps: SessionCollaborationDel
               settlements.delete(turnId);
             }
           }
-          const pending = await host.call<{ messages: SessionCollaborationMessage[] }>("session.collaboration.pending", {});
-          checkCurrent(host);
-          await Promise.all(pending.messages.map(async (message) => {
-            try { await dispatch(message); }
-            catch (error) {
-              deps.log("Session completion delivery is pending or failed", { messageId: message.id, error: String(error) });
-            }
-          }));
+          let afterMessageId: string | undefined;
+          do {
+            const pending = await host.call<{ messages: SessionCollaborationMessage[]; nextCursor?: string | null }>(
+              "session.collaboration.pending", afterMessageId ? { afterMessageId } : {},
+            );
+            checkCurrent(host);
+            await Promise.all(pending.messages.map(async (message) => {
+              try { await dispatch(message); }
+              catch (error) {
+                deps.log("Session completion delivery is pending or failed", { messageId: message.id, error: String(error) });
+              }
+            }));
+            afterMessageId = pending.nextCursor ?? undefined;
+          } while (afterMessageId);
         } while (dirty);
       })();
       try { await draining; }
