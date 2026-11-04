@@ -1,0 +1,123 @@
+name: Candidate packages
+run-name: Candidate packages at ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    name: Package ${{ matrix.platform }} ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, platform: linux, arch: x64, dist: 'dist:linux' }
+          - { os: ubuntu-22.04-arm, platform: linux, arch: arm64, dist: 'dist:linux' }
+          - { os: macos-15, platform: mac, arch: arm64, dist: 'dist:mac' }
+          - { os: macos-15-intel, platform: mac, arch: x64, dist: 'dist:mac' }
+          - { os: windows-latest, platform: win, arch: x64, dist: 'dist:win' }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Verify native architecture and pinned source
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          test "$(git rev-parse HEAD)" = "$EXPECTED_COMMIT"
+          node -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Native runner architecture mismatch")'
+
+      - name: Prepare package inputs
+        run: |
+          set -euo pipefail
+          cargo build --release --locked -p host-core &
+          host_build_pid=$!
+          trap 'kill "$host_build_pid" 2>/dev/null || true' EXIT
+          pnpm install --frozen-lockfile
+          pnpm --filter '@pi-desktop/desktop^...' --fail-if-no-match build
+          wait "$host_build_pid"
+          trap - EXIT
+
+      - name: Build candidate installers without publishing
+        run: pnpm --filter @pi-desktop/desktop run ${{ matrix.dist }} -- --${{ matrix.arch }}
+
+      - name: Verify Linux glibc floor
+        if: matrix.platform == 'linux'
+        run: node scripts/check-linux-host-glibc.mjs target/release/pi-desktop-host-core
+
+      - name: Verify macOS custom update metadata
+        if: matrix.platform == 'mac'
+        run: node scripts/check-custom-update-release.mjs
+
+      - name: Record provenance and SHA-256 checksums
+        env:
+          PACKAGE_PLATFORM: ${{ matrix.platform }}
+          PACKAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { createHash } from 'node:crypto';
+          import { createReadStream } from 'node:fs';
+          import { readFile, readdir, writeFile, stat } from 'node:fs/promises';
+          const root = 'apps/desktop/release';
+          const pkg = JSON.parse(await readFile('apps/desktop/package.json', 'utf8'));
+          const names = (await readdir(root)).filter(name => /\.(dmg|zip|exe|AppImage|deb|rpm|blockmap)$/.test(name) || /^local.*\.yml$/.test(name)).sort();
+          const required = { mac: ['.dmg', '-mac.zip', 'local-mac.yml'], win: [`PI-Desktop-Setup-${pkg.build.extraMetadata.version}.exe`, `PI-Desktop-Portable-${pkg.build.extraMetadata.version}.exe`, `PI-Desktop-Portable-${pkg.build.extraMetadata.version}.zip`], linux: ['.AppImage', '.deb', '.rpm'] }[process.env.PACKAGE_PLATFORM];
+          for (const suffix of required) {
+            if (!names.some(name => name.endsWith(suffix))) throw new Error(`Missing package ${suffix}`);
+          }
+          const files = [];
+          for (const name of names) {
+            const file = `${root}/${name}`;
+            const info = await stat(file);
+            if (!info.isFile() || info.size === 0) throw new Error(`Invalid artifact ${name}`);
+            const hash = createHash('sha256');
+            for await (const chunk of createReadStream(file)) hash.update(chunk);
+            files.push({ name, size: info.size, sha256: hash.digest('hex') });
+          }
+          const provenance = { commit: process.env.GITHUB_SHA, runId: process.env.GITHUB_RUN_ID,
+            platform: process.env.PACKAGE_PLATFORM, arch: process.env.PACKAGE_ARCH,
+            version: pkg.build.extraMetadata.version, signing: 'unsigned candidate; not notarized', files };
+          await writeFile(`${root}/provenance.json`, JSON.stringify(provenance, null, 2) + '\n');
+          await writeFile(`${root}/SHA256SUMS`, files.map(file => `${file.sha256}  ${file.name}`).join('\n') + '\n');
+          console.log(JSON.stringify(provenance, null, 2));
+          NODE
+
+      - name: Upload candidate packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: candidate-${{ matrix.platform }}-${{ matrix.arch }}
+          retention-days: 14
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.rpm
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/local*.yml
+            apps/desktop/release/SHA256SUMS
+            apps/desktop/release/provenance.json
