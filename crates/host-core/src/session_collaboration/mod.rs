@@ -3,17 +3,19 @@
 use anyhow::{anyhow, Result};
 use rusqlite::params;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::{
     db::{ms_to_ts, now_ms, Database},
     sessions,
 };
-mod permissions;
+pub mod permissions;
 mod projections;
 mod provenance;
 mod repository;
 mod settlement;
+pub mod workspace;
 pub use provenance::{prepare_append, validate_replacement};
 pub use repository::{get, Message};
 pub use settlement::{begin_turn, recover, settle_turn};
@@ -32,10 +34,24 @@ pub(super) fn string<'a>(input: &'a Value, key: &str, limit: usize) -> Result<&'
     Ok(value)
 }
 
-fn send_record(db: &Database, input: &Value, target: &str, kind: &str) -> Result<Message> {
+fn send_record(
+    db: &Database,
+    grants: &HashMap<String, Vec<String>>,
+    input: &Value,
+    target: &str,
+    kind: &str,
+) -> Result<Message> {
     let source = string(input, "sourceSessionId", 256)?;
     let plugin = string(input, "pluginId", 256)?;
-    let content = string(input, "content", 65_536)?;
+    let content = string(
+        input,
+        "content",
+        if plugin == workspace::OWNER_ID {
+            384_256
+        } else {
+            65_536
+        },
+    )?;
     let key = string(input, "idempotencyKey", 256)?;
     let notify = input
         .get("notifyOnCompletion")
@@ -100,12 +116,13 @@ fn send_record(db: &Database, input: &Value, target: &str, kind: &str) -> Result
             input.get("sourceTurnId").and_then(Value::as_str),
         )?,
         permission_ceiling,
+        external_write_ceiling: permissions::capture_external_scope(db, grants, source, target)?,
     };
     repository::insert(db, &message, key)?;
     Ok(message)
 }
 
-fn spawn(db: &Database, input: &Value) -> Result<Value> {
+fn spawn(db: &Database, grants: &HashMap<String, Vec<String>>, input: &Value) -> Result<Value> {
     let source = string(input, "sourceSessionId", 256)?;
     let plugin = string(input, "pluginId", 256)?;
     let key = string(input, "idempotencyKey", 256)?;
@@ -166,20 +183,29 @@ fn spawn(db: &Database, input: &Value) -> Result<Value> {
                 .map(str::to_owned),
             project_path: parent.summary.project_path,
             thinking_level: Some(parent.summary.thinking_level),
-            permission_mode: Some(parent.summary.permission_mode),
+            permission_mode: Some(if plugin == workspace::OWNER_ID {
+                permissions::effective_mode(db, source)?
+            } else {
+                parent.summary.permission_mode
+            }),
             // Delegated workers keep the default tier (ADR 0334).
             fast_mode: false,
         },
     )?;
     db.conn().execute("INSERT INTO session_collaboration_links(session_id,created_by_session_id,plugin_id,created_at) VALUES(?1,?2,?3,?4)",params![created.id,source,plugin,now_ms()])?;
-    let message = send_record(db, input, &created.id, "task")?;
+    let message = send_record(db, grants, input, &created.id, "task")?;
     tx.commit()?;
     Ok(json!({"sessionId":created.id,"message":message}))
 }
 
-pub fn handle(db: &Database, method: &str, input: &Value) -> Result<Value> {
+pub fn handle(
+    db: &Database,
+    grants: &HashMap<String, Vec<String>>,
+    method: &str,
+    input: &Value,
+) -> Result<Value> {
     match method {
-        "session.collaboration.spawn" => spawn(db, input),
+        "session.collaboration.spawn" => spawn(db, grants, input),
         "session.collaboration.send" => {
             let target = string(input, "sessionId", 256)?;
             let kind = input
@@ -190,21 +216,37 @@ pub fn handle(db: &Database, method: &str, input: &Value) -> Result<Value> {
                 return Err(anyhow!("INVALID_ARGUMENT: invalid message kind"));
             }
             let tx = db.conn().unchecked_transaction()?;
-            let message = send_record(db, input, target, kind)?;
+            let message = send_record(db, grants, input, target, kind)?;
             tx.commit()?;
             Ok(json!({"message":message}))
         }
         "session.collaboration.message" => {
             Ok(json!({"message":get(db,string(input,"messageId",256)?)?}))
         }
+        "session.collaboration.validateNative" => {
+            workspace::validate_delivery(db, string(input, "messageId", 256)?)
+        }
         "session.collaboration.status" => {
             projections::summary(db, string(input, "sessionId", 256)?)
         }
         "session.collaboration.list" => projections::list(db),
         "session.collaboration.result" => projections::result(db, input),
-        "session.collaboration.pending" => Ok(
-            json!({"messages":repository::pending_callbacks(db,input.get("sessionId").and_then(Value::as_str))?}),
-        ),
+        "session.collaboration.pending" => {
+            let after = input
+                .get("afterMessageId")
+                .map(|_| string(input, "afterMessageId", 256))
+                .transpose()?;
+            let messages = repository::pending_callbacks(
+                db,
+                input.get("sessionId").and_then(Value::as_str),
+                after,
+            )?;
+            let next_cursor = messages
+                .last()
+                .filter(|_| messages.len() == 64)
+                .map(|message| message.id.clone());
+            Ok(json!({"messages": messages, "nextCursor": next_cursor}))
+        }
         "session.collaboration.fail" => {
             let id = string(input, "messageId", 256)?;
             let tx = db.conn().unchecked_transaction()?;

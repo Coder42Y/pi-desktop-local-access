@@ -156,3 +156,16 @@ describe("ApprovalBroker", () => {
     expect(broker.list("s1")).toHaveLength(1);
   });
 });
+
+
+describe("external filesystem approval provenance", () => {
+  it("preserves Host-issued scope for remote/late-attaching clients", () => {
+    const broker = new ApprovalBroker(new FakeApprovalPort(), new FixedClock());
+    const request = broker.fromToolPermission({ ...toolRequest,
+      externalAccess: { kind: "filesystem-write", hostKey: "ssh-personal" },
+    }, { turnId: "t1", revision: 1, lifetimeMs: 1000, allowSession: false });
+    expect(request.externalAccess).toEqual({ kind: "filesystem-write", hostKey: "ssh-personal" });
+    expect(request.allowedDecisions).toContain("allow-session");
+    expect(broker.list("s1")[0]?.externalAccess).toEqual(request.externalAccess);
+  });
+});

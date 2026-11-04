@@ -50,6 +50,7 @@ node apps/pi-host/scripts/bundle.mjs --host-core "$PWD/target/debug/pi-desktop-h
 PI_HOST_E2E_BUNDLE="$PWD/apps/pi-host/dist-bundle/candidate" node scripts/e2e-remote-mvp.mjs
 node scripts/e2e-remote-mvp-ui.mjs
 PI_HOST_CORE_BINARY="$PWD/target/debug/pi-desktop-host-core" node scripts/e2e-local-agent-remote-tools.mjs
+pnpm test:e2e:headless-collaboration
 ```
 
 Set `--out <directory>` to place the Host bundle elsewhere, and use the actual
@@ -140,3 +141,17 @@ See [remote architecture](../../docs/spec/02-architecture/05-remote-agent-contro
 - An SSH bootstrap already downloading/installing has no mid-step cancellation
   interface yet. Closing prevents late registration and releases a returned forward,
   but does not undo or immediately interrupt an already-started remote installation.
+
+## Native session collaboration on the Host
+
+Host-executed Agent sessions use the same native session tools as Desktop. The
+shared Node ledger consumer admits native sends/spawns, retries accepted work
+when a human turn queue is full, and settles requested reports/results only after
+durable turn and transcript completion. Rust remains the persistence authority.
+
+Schema v28 snapshots initiating filesystem scope per delivery, including destination
+Host identity. A worker cannot borrow its existing broader grant or widen a queued
+request through later grant changes or forwarding. Legacy ledger rows keep their
+data with no external write authority. Ordinary human turns retain their own grants.
+The isolated headless E2E starts actual Host/Agent processes and a local model
+fixture, not a personal SSH machine or paid model provider.

@@ -30,7 +30,8 @@ const pluginAgentComplete = load("../electron/main/plugin-agent-complete.ts", {
 
 const { createSessionCollaborationService } = load("../electron/main/services/session-collaboration.ts", {
   "node:crypto": crypto,
-  "../agent-host-bridge": { DESKTOP_PRINCIPAL: { kind: "desktop" } },
+  "@pi-desktop/host-runtime": await import("@pi-desktop/host-runtime"),
+  "../agent-host-bridge": { DESKTOP_PRINCIPAL: { subject: "desktop", roles: ["owner"], pairedDevice: true } },
   "../plugin-agent-complete": pluginAgentComplete,
 });
 
@@ -359,4 +360,132 @@ test("spawn without a model key never selects an un opted-in default model (#118
     { code: "MODEL_NOT_CONFIGURED" },
   );
   assert.deepEqual(methodCalls(host, "session.collaboration.spawn"), []);
+});
+
+
+test("native workspace messages use the existing queue without a loaded plugin", async () => {
+  const pending = sessionMessage({ pluginId: "host:workspace-sessions", notifyOnCompletion: false });
+  const admissions = [];
+  const queued = [];
+  const host = createHost("host-1", (method) => {
+    if (method === "session.collaboration.pending") return { messages: [pending] };
+    if (method === "session.collaboration.message") return { message: pending };
+    if (method === "session.collaboration.validateNative") return { ok: true };
+    return {};
+  });
+  const bridge = {
+    queue: { list: () => queued },
+    agentHost: { startTurn: async (_principal, input) => {
+      admissions.push(input);
+      queued.push({ sessionMessageId: pending.id });
+    } },
+  };
+  const { service } = createService({ host, bridge, pluginLoaded: false });
+  await service.drain();
+  await service.drain();
+  assert.equal(admissions.length, 1);
+  assert.equal(admissions[0].admission, "queue");
+  assert.equal(admissions[0].sessionId, "target-session");
+  assert.equal(admissions[0].input.sessionMessageId, pending.id);
+  assert.equal(methodCalls(host, "session.collaboration.validateNative").length, 2);
+  assert.deepEqual(methodCalls(host, "session.collaboration.fail"), []);
+});
+
+test("a native message moved outside its workspace is refused before queue admission", async () => {
+  const pending = sessionMessage({ pluginId: "host:workspace-sessions" });
+  let admitted = false;
+  const host = createHost("host-1", (method) => {
+    if (method === "session.collaboration.pending") return { messages: [pending] };
+    if (method === "session.collaboration.message") return { message: pending };
+    if (method === "session.collaboration.validateNative") {
+      throw Object.assign(new Error("Workspace changed"), { errorCode: "PERMISSION_DENIED" });
+    }
+    return {};
+  });
+  const { service } = createService({ host, pluginLoaded: false, bridge: {
+    queue: { list: () => [] },
+    agentHost: { startTurn: async () => { admitted = true; } },
+  } });
+  await service.drain();
+  assert.equal(admitted, false);
+  assert.equal(methodCalls(host, "session.collaboration.fail")[0].params.error, "PERMISSION_DENIED: Workspace changed");
+});
+
+test("disabled plugins still cannot dispatch their queued messages", async () => {
+  const pending = sessionMessage();
+  const host = createHost("host-1", (method) => {
+    if (method === "session.collaboration.pending") return { messages: [pending] };
+    if (method === "session.collaboration.message") return { message: pending };
+    return {};
+  });
+  const { service } = createService({ host, pluginLoaded: false, bridge: {
+    queue: { list: () => [] },
+    agentHost: { startTurn: async () => { assert.fail("Disabled plugin was dispatched"); } },
+  } });
+  await service.drain();
+  assert.equal(methodCalls(host, "session.collaboration.fail")[0].params.error, "ABORTED: The sending plugin is no longer enabled");
+  assert.deepEqual(methodCalls(host, "session.collaboration.validateNative"), []);
+});
+
+
+for (const report of [false, true]) test(`a full human queue defers a native ${report ? "phase report" : "message"} until capacity returns`, async () => {
+  const { AgentHost } = await import("@pi-desktop/agent-host");
+  const principal = { subject: "desktop", roles: ["owner"], pairedDevice: true };
+  const pending = sessionMessage({ pluginId: "host:workspace-sessions",
+    ...(report ? { content: JSON.stringify({ state: "phase_completed", content: "Done" }) } : {}),
+  });
+  const failures = [];
+  const host = createHost("host-1", (method, params) => {
+    if (method === "session.collaboration.pending") return { messages: pending.status === "queued" ? [pending] : [] };
+    if (method === "session.collaboration.message") return { message: pending };
+    if (method === "session.collaboration.fail") { failures.push(params); pending.status = "failed"; }
+    return { ok: true };
+  });
+  const runtime = { async prompt() { return { turnId: "human-running" }; }, async stop() { return { requested: true }; },
+    async abort() {}, async respondInput() {} };
+  const agentHost = new AgentHost({ runtime,
+    sessions: { async get(id) { return { id, title: "Target", mode: "agent", permissionMode: "auto", createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" }; },
+      async history() { return { items: [], hasMore: false }; } },
+    approvals: { async resolveTool() {}, async resolveContract() {}, async listPendingTools() { return []; } },
+  });
+  await agentHost.start();
+  await agentHost.startTurn(principal, { sessionId: pending.targetSessionId, input: { text: "Human running" }, context: { requestId: "running" } });
+  const humans = [];
+  for (let i = 0; i < 8; i++) humans.push(await agentHost.startTurn(principal, {
+    sessionId: pending.targetSessionId, input: { text: `Human queued ${i}` }, admission: "queue", context: { requestId: `human-${i}` },
+  }));
+  const bridge = { agentHost, queue: { list: (id) => agentHost.queueEntries(id) }, interruptSessionMessage: async () => {} };
+  const { service } = createService({ host, bridge, pluginLoaded: false });
+  await service.drain();
+  assert.equal(pending.status, "queued");
+  assert.deepEqual(failures, []);
+  await agentHost.cancelTurn(principal, humans.at(-1).turn.id);
+  await service.drain();
+  await service.drain();
+  assert.equal(agentHost.queueEntries(pending.targetSessionId).filter(entry => entry.sessionMessageId === pending.id).length, 1);
+  assert.equal(agentHost.queueEntries(pending.targetSessionId).filter(entry => !entry.sessionMessageId).length, 7);
+  assert.deepEqual(failures, []);
+});
+
+test("64 busy deliveries do not starve a later ready session", async () => {
+  const blocked = Array.from({ length: 64 }, (_, i) => sessionMessage({
+    id: `busy-${i}`, targetSessionId: `busy-session-${Math.floor(i / 8)}`, pluginId: "host:workspace-sessions",
+  }));
+  const ready = sessionMessage({ id: "ready", targetSessionId: "idle-session", pluginId: "host:workspace-sessions" });
+  const admitted = [];
+  const host = createHost("host", (method, params) => {
+    if (method === "session.collaboration.pending") return params.afterMessageId
+      ? { messages: [ready] } : { messages: blocked, nextCursor: blocked.at(-1).id };
+    if (method === "session.collaboration.message") return { message: [...blocked, ready].find(row => row.id === params.messageId) };
+    return { ok: true };
+  });
+  const { service } = createService({ host, bridge: { queue: { list: () => [] },
+    agentHost: { async startTurn(_principal, input) {
+      if (input.sessionId !== "idle-session") throw Object.assign(new Error("full human queue"), { errorCode: "AGENT_BUSY" });
+      admitted.push(input.input.sessionMessageId);
+    } },
+  } });
+  await service.drain();
+  assert.deepEqual(admitted, ["ready"]);
+  assert.deepEqual(methodCalls(host, "session.collaboration.fail"), []);
 });

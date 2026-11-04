@@ -23,6 +23,8 @@ Each ADR includes:
 | ssh-upload-shared-profiles | [Shared SSH Upload connection profiles](ssh-upload-shared-profiles.md) | Accepted for plugin-only candidate |
 |---|---|---|
 | local-file-viewing-all-directories | [All-directory local file viewing in a private build](local-file-viewing-all-directories.md) | Accepted for the user-requested local build only |
+| external-filesystem-conversation-consent | [Conversation-wide external filesystem consent](external-filesystem-conversation-consent.md) | Implemented candidate |
+| workspace-session-messaging | [Native workspace session collaboration](workspace-session-messaging.md) | Implemented candidate |
 | plugin-projects-list | [Read-only durable project enumeration for plugins](plugin-projects-list.md) | Accepted |
 | append-only-review-state | [Append-only review state](append-only-review-state.md) | Implemented candidate |
 | lossless-tool-image-storage | [Lossless tool-image storage and bounded history mutations](lossless-tool-image-storage.md) | Implemented candidate |

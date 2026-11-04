@@ -76,10 +76,14 @@ export class ApprovalBroker {
       revision: context.revision,
       toolName: request.toolName,
       risk: request.risk,
+      ...(request.externalAccess ? { externalAccess: request.externalAccess } : {}),
       ...(request.agentName ? { agentName: request.agentName } : {}),
       ...(request.parentToolCallId ? { parentToolCallId: request.parentToolCallId } : {}),
       ...(request.nestedParentToolCallId ? { nestedParentToolCallId: request.nestedParentToolCallId } : {}),
-      allowedDecisions: context.allowSession
+      // The Host-authenticated external scope needs an explicit conversation
+      // grant. AgentHost still restricts who can choose it (paired owner or
+      // an explicitly configured remote-grant policy).
+      allowedDecisions: context.allowSession || request.externalAccess?.kind === "filesystem-write"
         ? [...RACP_TOOL_APPROVAL_DECISIONS]
         : RACP_TOOL_APPROVAL_DECISIONS.filter((decision) => decision !== "allow-session"),
     };

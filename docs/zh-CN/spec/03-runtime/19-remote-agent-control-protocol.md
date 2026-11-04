@@ -374,3 +374,23 @@ cookie profile 与 Host link 标记为不排期；终端流式操作、`tools/ad
 `tool/execute` 中继、host-core 持久化的队列、远程订阅者 30 分钟默认审批寿命和
 `applyCeilingToPairedDevices` 策略同属该修订。
 完整状态机、示例和验收条款见英文源规格。
+
+## External filesystem authorization amendment
+
+The owner-only workspace/toolExecute request accepts optional boolean
+allowExternalWrites (absent/false by default). Only the admitted Host relay sets
+it; model args do not grant authority. Explicit reads may resolve outside the
+workspace; external mutation and arbitrary Bash require the flag. The remote
+runner preserves canonical path checks and cancellation. The local Host
+conservatively requests broad external-write consent before remote mutations,
+including relative paths, because it cannot preflight remote symlink targets.
+Tool approval requests optionally carry externalAccess: {kind: filesystem-write,
+hostKey?: string}. Live events/snapshots preserve it and the Desktop binds the
+shown Host key to the connected target. Existing approval decisions stay unchanged.
+The UI explicitly requests allow-session for the broad scope. Old runners require
+an upgrade to accept the additive field; there is no unsafe fallback.
+
+The external filesystem approval retains allow-session in its offered decisions
+under the default remote policy. AgentHost permits that decision only to a paired
+owner (or an explicitly enabled remote session-grant policy). This does not turn
+on ordinary remote tool-wide grants. Completed responses remain idempotent.

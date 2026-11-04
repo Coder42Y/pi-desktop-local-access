@@ -1,4 +1,4 @@
-# 04. Data Storage (Schema v27)
+# 04. Data Storage (Schema v28)
 
 
 ### Lossless tool-image storage (#1868)
@@ -1674,7 +1674,7 @@ truncating at a guessed position.
 - JSON columns are read blind on hot paths (shipped to the renderer as-is);
   anything filtered or summed is a promoted column by rule.
 
-## 7. Versioning, v7 reset, and v8-to-v27 migration
+## 7. Versioning, v7 reset, and v8-to-v28 migration
 
 - `PRAGMA user_version` stays the schema authority; future structural changes
   add ordered Rust migration fns again, each in one transaction, with a
@@ -1685,7 +1685,7 @@ truncating at a guessed position.
   Sessions, providers, and settings from the old file are not carried over;
   the archive remains for manual recovery. All pre-v7 migration code
   (v1 `settings.sqlite` import, v2→v6 chain) is deleted.
-- Fresh installs run the full v27 DDL directly.
+- Fresh installs run the full v28 DDL directly.
 - **Schema v7 first reaches v8, then uses the guarded path.** The v7→v8
   migration is followed by the same guarded v8→v15 migration; schema-v9 and
   schema-v10 databases take the same guarded path and receive an exact readable
@@ -2053,3 +2053,19 @@ An unknown price is distinct from a known zero price; partial known costs remain
 on the individual operations. Late usage targets its captured turn and does not
 revive it or debit the currently active turn. Immediate nested parent and owning
 Task remain separate optional transcript/event fields.
+
+
+## Delivery filesystem ceiling migration (schema v28)
+
+The v27-to-v28 transaction adds nullable TEXT
+session_collaboration_messages.external_write_ceiling and retains a v27 backup.
+The value is the serialized Host-captured filesystem-write scope with optional
+SSH hostKey; NULL means no external authorization. Legacy rows remain intact and
+receive NULL, never the receiver's existing grant. Invalid persisted scope JSON
+produces an observable storage error rather than an unrestricted default.
+
+Every new delivery/callback retains the initiating ceiling. The actual running
+turn determines its use, and external mutation/arbitrary Bash requires both the
+receiver's own grant and that captured scope for the current Host. Neither queued
+grant updates nor forwarding through another session widens authority. Session
+IDs, history, provider settings and normal human-turn grants are not rewritten.

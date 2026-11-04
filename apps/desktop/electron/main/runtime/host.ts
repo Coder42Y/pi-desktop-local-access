@@ -1,4 +1,4 @@
-import { ErrorCodes, IPC, type AgentEventEnvelope, type PlanExecutionFinishStatus, type Risk } from "@pi-desktop/shared";
+import { ErrorCodes, IPC, type AgentEventEnvelope, type PlanExecutionFinishStatus, type ToolPermissionRequest } from "@pi-desktop/shared";
 import { assertLinuxGlibcSupported } from "../linux-glibc";
 import { HostProcess } from "../host-process";
 import type { Logger } from "../logger";
@@ -44,6 +44,7 @@ export type HostRuntimeDependencies = {
   superviseRestart: (kind: "host" | "sidecar") => Promise<void>;
   isQuitting: () => boolean;
   ensureSystemProxyRelay: () => Promise<string>;
+  onSessionCollaborationChanged?: () => void;
 };
 
 export function createHostRuntime({
@@ -70,6 +71,7 @@ export function createHostRuntime({
   superviseRestart,
   isQuitting,
   ensureSystemProxyRelay,
+  onSessionCollaborationChanged,
 }: HostRuntimeDependencies): {
   wireHost: (host: HostProcess) => void;
   startHost: () => Promise<void>;
@@ -86,6 +88,10 @@ export function createHostRuntime({
     // Notifications from a previous host generation must never reach the
     // current plugin/renderer bridge after a restart.
     if (runtimeState.host !== h) return;
+    if (method === "session.collaboration.changed") {
+      onSessionCollaborationChanged?.();
+      return;
+    }
     if (method === "tools.remoteExecute") {
       void remoteTools.execute(params as RemoteWorkspaceToolRequest);
       return;
@@ -108,15 +114,7 @@ export function createHostRuntime({
       return;
     }
     if (method === "permissions.request") {
-      const permission = params as {
-        requestId: string;
-        sessionId: string;
-        toolCallId: string;
-        toolName: string;
-        argsPreview: string;
-        risk: Risk;
-        reason: string;
-      };
+      const permission = params as ToolPermissionRequest;
       // A delegate's call is already in `activeToolCalls` by the time the host
       // asks: the sidecar forwards `tool_start` before it executes the tool.
       // Without this the dialog would attribute a delegate's write to the main
@@ -153,6 +151,7 @@ export function createHostRuntime({
             argsPreview: permission.argsPreview,
             risk: permission.risk,
             reason: permission.reason,
+            ...(permission.externalAccess ? { externalAccess: permission.externalAccess } : {}),
             ...(asking?.agentName ? { agentName: asking.agentName } : {}),
             ...(asking?.parentToolCallId
               ? { parentToolCallId: asking.parentToolCallId }

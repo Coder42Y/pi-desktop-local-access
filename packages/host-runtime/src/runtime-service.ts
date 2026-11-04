@@ -8,7 +8,7 @@ import {
   type AgentEventEnvelope,
   type AgentStatus,
   type AskToolResolution,
-  type Risk,
+  type ToolPermissionRequest,
   type UiMessage,
 } from "@pi-desktop/shared";
 
@@ -145,15 +145,7 @@ export class RuntimeService implements RuntimePort {
     const off = host.onNotification((method, params) => {
       if (this.options.getHost() !== host) return;
       if (method !== "permissions.request") return;
-      const permission = params as {
-        requestId: string;
-        sessionId: string;
-        toolCallId: string;
-        toolName: string;
-        argsPreview: string;
-        risk: Risk;
-        reason: string;
-      };
+      const permission = params as ToolPermissionRequest;
       // A delegate's call is already tracked by the time the host asks: the
       // sidecar forwards tool_start before it executes the tool.
       const asking = this.events.toolCall(permission.sessionId, permission.toolCallId);
@@ -180,6 +172,7 @@ export class RuntimeService implements RuntimePort {
             argsPreview: permission.argsPreview,
             risk: permission.risk,
             reason: permission.reason,
+            ...(permission.externalAccess ? { externalAccess: permission.externalAccess } : {}),
             ...(asking?.agentName ? { agentName: asking.agentName } : {}),
             ...(asking?.parentToolCallId ? { parentToolCallId: asking.parentToolCallId } : {}),
             ...(asking?.nestedParentToolCallId ? { nestedParentToolCallId: asking.nestedParentToolCallId } : {}),
@@ -505,6 +498,10 @@ export class RuntimeService implements RuntimePort {
 
   activeTurnId(sessionId: string): string | undefined {
     return this.activeTurns.get(sessionId);
+  }
+
+  flushTranscript(): Promise<boolean> {
+    return this.events.flushPersistence();
   }
 
   // -------------------------------------------------------------------------

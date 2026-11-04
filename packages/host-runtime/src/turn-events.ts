@@ -143,6 +143,11 @@ export class TurnEventPipeline {
     return this.persistence.size();
   }
 
+  async flushPersistence(): Promise<boolean> {
+    await this.persistence.flush();
+    return this.persistence.size() === 0;
+  }
+
   async dispose(): Promise<void> {
     await this.checkpointer.flushAll();
     this.checkpointer.dispose();

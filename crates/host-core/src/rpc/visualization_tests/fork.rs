@@ -19,6 +19,17 @@ async fn rpc_bash_created_visualization_survives_relocation_fork_and_source_dele
         workspace,
     };
     let (state, id) = rpc_session(&f, false, "auto").await;
+    // Explicit session grant: this test exercises visualization relocation,
+    // not the external-filesystem permission interaction.
+    state
+        .lock()
+        .await
+        .session_grants
+        .entry(id.clone())
+        .or_default()
+        .push(
+            crate::permissions::external_access::ExternalAccess::filesystem_write(None).grant_key(),
+        );
     let root = visualizations::session_dir(&f.data_dir, &id).unwrap();
     let chart = root.join("chart.html");
     let shell = tools::shell::catalog(None).effective.unwrap();

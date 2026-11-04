@@ -67,3 +67,31 @@ describe("TurnPersistence", () => {
     expect(logs).toEqual(["transcript append failed"]);
   });
 });
+
+it("retains failed rows in session order until a later flush acknowledges them", async () => {
+  let writable = false;
+  const written: string[] = [];
+  const persistence = new TurnPersistence({
+    getHost: () => ({ async call(_method: string, params: { message: UiMessage }) {
+      if (!writable) throw new Error("disk full");
+      written.push(params.message.id);
+    } }),
+    log: () => undefined,
+  });
+  await persistence.append({ sessionId: "s", message: row("first") });
+  await persistence.append({ sessionId: "s", message: row("second") });
+  await persistence.flush();
+  expect(persistence.size()).toBe(2);
+  expect(written).toEqual([]);
+  writable = true;
+  await persistence.flush();
+  expect(written).toEqual(["first", "second"]);
+  expect(persistence.size()).toBe(0);
+});
+
+it("does not discard an append when bounded Host-unavailable retries are exhausted", async () => {
+  const persistence = new TurnPersistence({ getHost: () => null, log: () => undefined, sleep: async () => {} });
+  await persistence.append({ sessionId: "s", message: row("unacknowledged") });
+  await persistence.flush();
+  expect(persistence.size()).toBe(1);
+});

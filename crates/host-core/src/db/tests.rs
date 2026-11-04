@@ -2257,3 +2257,62 @@ fn v24_model_discovery_upgrade_preserves_rows_and_reopens() {
         models
     );
 }
+
+#[test]
+fn v27_collaboration_ceiling_upgrade_preserves_nonempty_ledger() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("pi.sqlite");
+    let id;
+    {
+        let db = Database::open(&path).unwrap();
+        id = crate::sessions::create_session(
+            &db,
+            Some("Existing".into()),
+            Some("agent".into()),
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+        .id;
+        db.conn().execute("INSERT INTO session_collaboration_messages
+            (id,plugin_id,source_session_id,source_title,target_session_id,target_title,kind,content,
+             status,idempotency_key,remaining_hops,permission_ceiling,result,created_at,updated_at)
+            VALUES ('legacy','plugin','source','Source',?1,'Existing','task','saved content',
+                'completed','key',8,'auto','saved result',1,2)", [&id]).unwrap();
+        db.conn()
+            .execute_batch(
+                "ALTER TABLE session_collaboration_messages DROP COLUMN external_write_ceiling;
+            PRAGMA user_version=27;",
+            )
+            .unwrap();
+    }
+    let db = Database::open(&path).unwrap();
+    assert_eq!(schema_version(db.conn()), 28);
+    let message = crate::session_collaboration::get(&db, "legacy")
+        .unwrap()
+        .unwrap();
+    assert_eq!(message.target_session_id, id);
+    assert_eq!(message.content, "saved content");
+    assert_eq!(message.result.as_deref(), Some("saved result"));
+    assert_eq!(message.status, "completed");
+    assert!(message.external_write_ceiling.is_none());
+    assert_eq!(
+        serde_json::to_value(&message).unwrap()["externalWriteCeiling"],
+        Value::Null
+    );
+    let backup = Connection::open(migration_backup_path(&path, 27)).unwrap();
+    assert_eq!(schema_version(&backup), 27);
+    assert_eq!(
+        backup
+            .query_row(
+                "SELECT content FROM session_collaboration_messages WHERE id='legacy'",
+                [],
+                |row| row.get::<_, String>(0)
+            )
+            .unwrap(),
+        "saved content"
+    );
+    db.conn().execute("UPDATE session_collaboration_messages SET external_write_ceiling='corrupt' WHERE id='legacy'", []).unwrap();
+    assert!(crate::session_collaboration::get(&db, "legacy").is_err());
+}

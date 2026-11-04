@@ -1,4 +1,12 @@
 /** Shared public types grouped by the owning application domain. */
+import type { ToolPermissionRequest } from "./agent.js";
+
+/** Host-issued scope, never model arguments or a plugin capability grant. */
+export type ExternalFilesystemAccess = { kind: "filesystem-write"; hostKey?: string };
+
+/** Public alias; live events and the UI use the same authoritative request. */
+export type PermissionRequest = ToolPermissionRequest;
+
 export type Risk = "low" | "medium" | "high";
 export type PermissionDecision = "allow-once" | "allow-session" | "deny";
 /** Permission mode (D115): how high-risk tool calls are approved.

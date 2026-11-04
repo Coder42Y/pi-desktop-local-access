@@ -168,6 +168,9 @@ jobs:
       - name: Build host-core
         run: cargo build -p host-core --locked
 
+      - name: Run headless native session collaboration E2E
+        run: pnpm test:e2e:headless-collaboration
+
       - name: Run plugin project enumeration Host/process E2E
         run: pnpm test:e2e:plugin-projects
 

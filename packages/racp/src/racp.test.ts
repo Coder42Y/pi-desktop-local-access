@@ -203,6 +203,30 @@ describe("RACP-WS turns, events, and approvals", () => {
     expect(viewerSide.events.filter((event) => event.kind === "approval.resolved")).toHaveLength(1);
   });
 
+  it("accepts one external filesystem grant from the paired owner through default RACP policy", async () => {
+    const h = await harness();
+    const ownerSide = await h.connect(OWNER_TOKEN);
+    const viewerSide = await h.connect(VIEWER_TOKEN);
+    try {
+      await ownerSide.client.request("session/attach", { sessionId: "s1" });
+      await ownerSide.client.request("events/subscribe", { scope: "session", sessionId: "s1" });
+      await ownerSide.client.request("turn/start", { sessionId: "s1", input: { text: "run" }, context: context("external-start") });
+      h.host.ingest(envelope("s1", "rt_1", { type: "agent_start" }));
+      h.host.ingest(envelope("s1", "rt_1", { type: "tool_permission_request", request: {
+        requestId: "external-grant", sessionId: "s1", toolCallId: "shell", toolName: "Bash", argsPreview: "fixture", risk: "high",
+        reason: "External filesystem writes need conversation consent", externalAccess: { kind: "filesystem-write" },
+      } }));
+      await flush();
+      const request = ownerSide.events.find((event) => event.kind === "approval.requested")!.payload;
+      expect(request).toMatchObject({ externalAccess: { kind: "filesystem-write" }, allowedDecisions: ["allow-once", "allow-session", "deny"] });
+      await expect(viewerSide.client.request("approval/respond", { approvalId: "external-grant", decision: "allow-session", context: context("viewer") })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      const response = { approvalId: "external-grant", decision: "allow-session", context: context("owner") };
+      expect(await ownerSide.client.request("approval/respond", response)).toMatchObject({ status: "resolved", decision: "allow-session", alreadyResolved: false });
+      expect(await ownerSide.client.request("approval/respond", { ...response, context: context("owner-again") })).toMatchObject({ alreadyResolved: true });
+      expect(h.approvals.tool).toEqual([{ requestId: "external-grant", decision: "allow-session" }]);
+    } finally { await ownerSide.client.close(); await viewerSide.client.close(); }
+  });
+
   it("answers input requests and closes the subscription of a client that stops acknowledging", async () => {
     const h = await harness();
     const closed: unknown[] = [];

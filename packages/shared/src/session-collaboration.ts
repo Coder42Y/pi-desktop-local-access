@@ -1,4 +1,5 @@
 /** Host-owned provenance and delivery projections for durable session collaboration. */
+import type { ExternalFilesystemAccess } from "./types/permissions.js";
 export type SessionMessageKind = "task" | "message" | "completion";
 export type SessionMessageStatus = "queued" | "running" | "completed" | "failed" | "cancelled" | "interrupted";
 
@@ -27,6 +28,8 @@ export type SessionCollaborationMessage = {
   notifyOnCompletion: boolean;
   /** Host snapshot; a later settings change cannot elevate queued work. */
   permissionCeiling: "ask" | "accept-edits" | "auto";
+  /** Host-captured initiating scope; null/absent never grants external writes. */
+  externalWriteCeiling?: ExternalFilesystemAccess | null;
   turnId?: string;
   replyToMessageId?: string;
   result?: string;

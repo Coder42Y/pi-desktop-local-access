@@ -8148,3 +8148,23 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
   over `pi-startup:` under the page CSP, playback advances, the reveal hands
   over an interactive shell, and an unplayable file yields the shell in about a
   second rather than holding the window.
+
+
+## Native workspace session collaboration
+
+User-approved [native workspace tools](../../adr/workspace-session-messaging.md)
+add scoped session discovery, bounded history reads, directed messages and bound
+phase reports over the D409 ledger. New native ordinary messages default to no
+callback; native delegation defaults to a report back to its initiator. Existing
+plugin defaults, independent fork snapshots and Host permission ownership stay
+unchanged. Busy targets queue messages; agent messages are not human steering or
+authorization. This does not restore the withdrawn general A2A broker.
+
+## Conversation-wide external filesystem consent
+
+The user clarified that local/personal SSH explicit reads should work outside
+the workspace. One explicit UI confirmation authorizes subsequent broad external
+changes for the conversation/subagents on that Host. The Host keeps this scope
+separate from per-tool grants; Auto cannot skip initial consent. Remote runner
+approval is carried only in the owner-side request, not model args. See
+[the ADR](../../adr/external-filesystem-conversation-consent.md).

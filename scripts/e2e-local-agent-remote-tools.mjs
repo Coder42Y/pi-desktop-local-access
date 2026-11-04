@@ -27,10 +27,12 @@ const root = await mkdtemp(join(process.env.PI_SCRATCH_DIR ?? tmpdir(), "local-a
 const remoteRoot = join(root, "remote-workspace");
 await mkdir(remoteRoot); await mkdir(join(root, "desktop"));
 await writeFile(join(remoteRoot, "README.md"), "REMOTE_READ_FIXTURE\n");
+await writeFile(join(root, "outside.txt"), "REMOTE_READ_FIXTURE\n");
 await writeFile(join(remoteRoot, "AGENTS.md"), "REMOTE_REPOSITORY_INSTRUCTIONS_FIXTURE\n");
 await writeFile(join(remoteRoot, "CLAUDE.md"), "LOWER_PRIORITY_INSTRUCTIONS_MUST_NOT_LOAD\n");
 const KEY = "local-model-fixture-key-never-forwarded";
 let modelCalls = 0;
+let phase = "initializing";
 let modelError;
 let host;
 let localHost;
@@ -54,22 +56,35 @@ const model = createServer(async (req, res) => {
     modelCalls++;
     res.writeHead(200, { "content-type": "text/event-stream" });
     const frame = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ id: `local-${modelCalls}`, object: "chat.completion.chunk", created: 1, model: input.model, choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
-    if (modelCalls <= 2) {
-      if (modelCalls === 2) assert.ok(JSON.stringify(input.messages).includes("REMOTE_READ_FIXTURE"), "actual remote Read enters local model context");
-      const name = modelCalls === 1 ? "Read" : "Bash";
-      const args = name === "Read" ? { path: "README.md" } : { command: "printf 'REMOTE_BASH_FIXTURE\\n' > marker.txt" };
+    if (modelCalls <= 4) {
+      if (modelCalls === 2) assert.ok(JSON.stringify(input.messages).includes("REMOTE_READ_FIXTURE"), "actual external remote Read enters local model context");
+      const probes = [
+        ["Read", { path: join(root, "outside.txt") }],
+        ["Bash", { command: `printf 'REMOTE_BASH_FIXTURE\\n' > '${join(root, "outside-marker.txt")}'` }],
+        ["Write", { path: join(root, "outside-second.txt"), content: "SECOND_EXTERNAL_WRITE" }],
+        ["Bash", { command: `printf 'SECOND_BASH\\n' >> '${join(root, "outside-marker.txt")}'` }],
+      ];
+      const [name, args] = probes[modelCalls - 1];
       frame({ role: "assistant", tool_calls: [{ index: 0, id: `local-tool-${modelCalls}`, type: "function", function: { name, arguments: JSON.stringify(args) } }] });
       frame({}, "tool_calls");
     } else {
-      assert.equal(modelCalls, 3, "model/tool execution is not replayed");
+      assert.equal(modelCalls, 5, "model/tool execution is not replayed");
       assert.ok(input.messages.some(message => message.role === "tool"));
       frame({ role: "assistant", content: "LOCAL_MODEL_REMOTE_TOOLS_OK" }); frame({}, "stop");
     }
     res.end("data: [DONE]\n\n");
-  } catch (error) { modelError = error; if (!res.headersSent) res.writeHead(500); res.end(); }
+  } catch (error) {
+    modelError = error;
+    console.error("Remote-tool fixture assertion failed:", error.message);
+    if (!res.headersSent) res.writeHead(400); res.end();
+  }
 });
 model.listen(0, "127.0.0.1"); await once(model, "listening");
-const deadline = setTimeout(() => { console.error("local-Agent remote-tool acceptance exceeded 60s"); process.exit(1); }, 60_000);
+const deadline = setTimeout(() => {
+  console.error("Remote-tool acceptance timed out", { phase, modelCalls, localPermissions, tools: wireCalls.map(call => call.toolName) });
+  modelError ??= new Error(`Remote-tool acceptance timed out during ${phase}`);
+  void runtime?.abort().catch(() => {});
+}, 30000);
 try {
   host = new HostProcess({ binaryPath: resolve(process.env.PI_HOST_CORE_BINARY), dataDir: join(root, "host"), onStderr: () => {} });
   await host.handshake();
@@ -102,7 +117,8 @@ try {
     if (method === "tools.remoteAbort") relay.cancel(params);
     if (method === "permissions.request") {
       localPermissions++;
-      void localHost.call("permissions.resolve", { requestId: params.requestId, decision: "allow-once" });
+      assert.deepEqual(params.externalAccess, { kind: "filesystem-write", hostKey: "fixture" });
+      void localHost.call("permissions.resolve", { requestId: params.requestId, decision: "allow-session" });
     }
   });
   let ended;
@@ -115,12 +131,17 @@ try {
     host: { call: (method, params) => localHost.call(method, params), onNotification: handler => localHost.onNotification(handler) },
     onEvent: envelope => ended(envelope),
   });
-  await Promise.all([runtime.prompt("Read README.md and write marker.txt using Bash.", "user-1", "local-turn"), done]);
+  phase = "runtime-tools";
+  await Promise.all([runtime.prompt("Read the explicitly named remote external fixture and write the requested external markers.", "user-1", "local-turn"), done]);
+  phase = "asserting-results";
   assert.equal(modelError, undefined);
-  assert.equal(modelCalls, 3);
-  assert.equal(localPermissions, 1, "Bash is approved by local permissions before remote dispatch");
-  assert.equal(await readFile(join(remoteRoot, "marker.txt"), "utf8"), "REMOTE_BASH_FIXTURE\n");
-  assert.deepEqual(wireCalls.map(call => call.toolName), ["Read", "Bash"]);
+  assert.equal(modelCalls, 5);
+  assert.equal(localPermissions, 1, "one Host-scoped confirmation covers later external Write and Bash");
+  assert.equal(await readFile(join(root, "outside-marker.txt"), "utf8"), "REMOTE_BASH_FIXTURE\nSECOND_BASH\n");
+  assert.equal(await readFile(join(root, "outside-second.txt"), "utf8"), "SECOND_EXTERNAL_WRITE");
+  assert.deepEqual(wireCalls.map(call => call.toolName), ["Read", "Bash", "Write", "Bash"]);
+  assert.ok(wireCalls.slice(1).every(call => call.allowExternalWrites === true));
+  assert.notEqual(wireCalls[0].allowExternalWrites, true);
   assert.ok(!JSON.stringify(wireCalls).includes(KEY), "local provider key never crosses the workspace boundary");
   assert.ok(wireCalls.every(call => !Object.keys(call).some(key => /provider|model|secret|auth/i.test(key))));
   const providers = await host.call("providers.list", {});
@@ -133,7 +154,7 @@ try {
   await assert.rejects(boot.executeWorkspaceTool({ ...wireCalls[0], hostKey: "fixture" }), "duplicate tool id cannot replay");
   await boot.removeHost("fixture");
   await assert.rejects(boot.executeWorkspaceTool({ ...wireCalls[0], toolCallId: "after-disconnect", hostKey: "fixture" }), { errorCode: "AGENT_UNAVAILABLE" });
-  console.log("PASS local model/key/instructions + local Rust project/permission relay + real RACP/Rust Read/Bash, no remote providers/projects/sessions, no replay/fallback");
+  console.log("PASS external remote reads + one conversation/Host grant + subsequent Write/Bash through real RACP/Rust, no remote providers/projects/sessions, no replay/fallback");
 } finally {
   clearTimeout(deadline);
   await runtime?.dispose(); relay?.dispose(); await localHost?.dispose(); await boot?.closeAll(); h?.server.close(); await binding?.close(); await host?.dispose();

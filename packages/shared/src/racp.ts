@@ -154,6 +154,8 @@ export const WorkspaceToolExecuteSchema = Type.Object({
   toolName: Type.Union([Type.Literal("Read"), Type.Literal("Glob"), Type.Literal("Grep"), Type.Literal("Write"), Type.Literal("Edit"), Type.Literal("Bash")]),
   args: Type.Record(Type.String(), Type.Unknown()),
   timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 21_600_000 })),
+  // Owner-side admission only; model tool arguments cannot set this field.
+  allowExternalWrites: Type.Optional(Type.Boolean()),
   expectedCommandShellId: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
   expectedCommandShellDialect: Type.Optional(Type.Union([Type.Literal("posix"), Type.Literal("powershell"), Type.Literal("cmd")])),
 }, { additionalProperties: false });
@@ -332,6 +334,10 @@ export const RacpApprovalRequestSchema = Type.Object({
   revision: Type.Integer({ minimum: 0 }),
   toolName: Type.Optional(Type.String()),
   risk: Type.Optional(Type.Union([Type.Literal("low"), Type.Literal("medium"), Type.Literal("high")])),
+  externalAccess: Type.Optional(Type.Object({
+    kind: Type.Literal("filesystem-write"),
+    hostKey: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
+  }, { additionalProperties: false })),
   agentName: Type.Optional(Type.String()),
   parentToolCallId: Type.Optional(Type.String()),
   nestedParentToolCallId: Type.Optional(Type.String()),

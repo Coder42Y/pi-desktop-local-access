@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS session_collaboration_messages (
   idempotency_key TEXT NOT NULL,
   remaining_hops INTEGER NOT NULL,
   permission_ceiling TEXT NOT NULL CHECK(permission_ceiling IN ('ask', 'accept-edits', 'auto')),
+  external_write_ceiling TEXT,
   result TEXT,
   error TEXT,
   created_at INTEGER NOT NULL,

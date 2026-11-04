@@ -1,5 +1,25 @@
 # Unreleased changes
 
+- Preserve the initiating conversation's filesystem authorization throughout
+  native deliveries, including queued/forwarded work and completion callbacks.
+  Headless Hosts now execute and settle native messaging through the shared
+  consumer; full turn queues defer accepted messages/reports instead of failing.
+
+- Recognize current conversation names after a sidebar rename. Session tools can
+  resolve the latest title to the same stable session for context reads/messages
+  without reopening the calling conversation. Duplicate names require selection;
+  missing/former names never silently create replacement sessions.
+
+- Allow explicit reads outside the workspace locally and on personal SSH Hosts.
+  External file changes and arbitrary shell execution ask once for a clear
+  conversation-wide authorization, including its subagents on that machine;
+  subsequent authorized external operations do not repeatedly interrupt work.
+
+- Add native workspace session collaboration: discover other sessions, read bounded
+  context, send messages, delegate durable work, and return requested phase reports
+  or questions to the initiating conversation. Busy sessions queue messages;
+  ordinary messages do not subscribe to automatic replies or grant permission.
+
 - Fixed the composer context ring staying at the pre-compaction figure after
   `/compact` or an automatic compaction until another turn ran (#2015). The
   ring now shows the compacted context's estimated size as soon as the

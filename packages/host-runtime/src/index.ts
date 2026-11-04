@@ -4,6 +4,7 @@ export * from "./runtime-supervisor.js";
 export * from "./host-ports.js";
 export * from "./launch-resolver.js";
 export * from "./session-message-input.js";
+export * from "./session-collaboration-delivery.js";
 export * from "./inflight-checkpoint.js";
 export * from "./plan-execution.js";
 export * from "./turn-persistence.js";
