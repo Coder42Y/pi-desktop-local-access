@@ -6338,6 +6338,26 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 - **Status**: Unit-covered (`auto-update.test.mjs` asserts
   `allowPrerelease = false`); packaged discovery scenario Draft
 
+#### E2E-SSH-external-file-preview
+
+- Candidate only, both SSH workspace and legacy remote-session paths.
+- Click an explicit absolute external text/image -> correct server/session
+  resolve -> bounded read -> content visible in the correct preview panel.
+- Missing paths show missing-file feedback; native reveal/open and local plugin
+  execution are denied. Unknown/disconnected Hosts never read local paths.
+- Authenticated viewer credentials cannot use workspace/preview; existing viewer
+  workspace/read still reads in-project files and rejects escapes.
+- Relative traversal/symlink escapes, external directory enumeration, shorthand
+  discovery, instructions, plugin and tool scopes stay contained.
+- Switch sessions while a preview response is delayed: the old result never
+  appears in the new session. Image results remain bounded and MIME-checked.
+- Automation: pi-host workspace-files tests, RACP workspace-preview tests,
+  desktop routing/capability tests and scripts/e2e-ssh-external-preview.mjs with
+  scripts/e2e/ssh-external-preview.jsx (isolated Chromium, real loopback RACP
+  WebSocket and actual temporary files). No paid provider or real user SSH used.
+- Deployment gate: matching updated Desktop/pi-host required; native installed
+  application and real SSH deployment acceptance not implied by the local E2E.
+
 #### E2E-UPDATE-custom-public-local-channel (NEXT-001)
 
 - Supersedes E2E-067A's stable-channel expectation for this custom distribution only.

@@ -13,6 +13,11 @@ export function RemoteWorkspace({ session, width, exiting, onExitAnimationEnd }:
   const { t } = useTranslation("remote");
   const [tab, setTab] = useState<"files" | "review">("files");
   const [directory, setDirectory] = useState("");
+  const fileRequest = useAppStore((state) => state.workPanelFileRequest);
+  const [selectedPreview, setSelectedPreview] = useState<{ path: string; mimeType?: string; seq?: number } | null>(null);
+  useEffect(() => {
+    if (fileRequest) { setTab("files"); setSelectedPreview(fileRequest); }
+  }, [fileRequest, session.id]);
   const [entries, setEntries] = useState<FsEntry[]>([]);
   const [file, setFile] = useState<{ path: string; read: FsReadResult } | null>(null);
   const [diff, setDiff] = useState<WorkspaceDiff | null>(null);
@@ -30,7 +35,10 @@ export function RemoteWorkspace({ session, width, exiting, onExitAnimationEnd }:
     setBusy(true); setError(null); setFile(null); setEntries([]); setDiff(null);
     const read = async () => {
       try {
-        if (tab === "files") {
+        if (tab === "files" && selectedPreview) {
+          const read = await api.fsRead(selectedPreview.path, selectedPreview.mimeType, session.id);
+          if (current(request)) setFile({ path: selectedPreview.path, read });
+        } else if (tab === "files") {
           const result = await api.remoteWorkspaceList(session.id, directory);
           if (current(request)) setEntries(result.entries);
         } else {
@@ -42,19 +50,13 @@ export function RemoteWorkspace({ session, width, exiting, onExitAnimationEnd }:
     };
     void read();
     return () => { generation.current++; };
-  }, [session.id, session.capabilities?.canReadWorkspace, directory, tab, revision]);
-  const open = async (entry: FsEntry) => {
+  }, [session.id, session.capabilities?.canReadWorkspace, directory, tab, revision, selectedPreview]);
+  const open = (entry: FsEntry) => {
     if (busy || !sessionAllows(session, "canReadWorkspace") || useAppStore.getState().activeSessionId !== session.id) return;
     if (!entry.name || /[/\\\0]/.test(entry.name) || entry.name === "." || entry.name === "..") return;
     const path = directory ? `${directory}/${entry.name}` : entry.name;
-    if (entry.kind === "dir") { setDirectory(path); return; }
-    const request = ++generation.current;
-    setBusy(true); setError(null); setFile(null);
-    try {
-      const read = await api.remoteWorkspaceRead(session.id, path);
-      if (current(request)) setFile({ path, read });
-    } catch (caught) { if (current(request)) setError(caught instanceof Error ? caught.message : String(caught)); }
-    finally { if (current(request)) setBusy(false); }
+    if (entry.kind === "dir") { setSelectedPreview(null); setDirectory(path); return; }
+    setSelectedPreview({ path });
   };
   return (
     <aside className={`work-panel remote-workspace${exiting ? " is-exiting" : ""}`}
@@ -75,14 +77,19 @@ export function RemoteWorkspace({ session, width, exiting, onExitAnimationEnd }:
         {tab === "files" && <>
           <div className="remote-actions">
             <code>{directory || "/"}</code>
-            <Button variant="ghost" disabled={busy || !directory} onClick={() => setDirectory(directory.split("/").slice(0, -1).join("/"))}>{t("parent")}</Button>
+            <Button variant="ghost" disabled={busy || (!directory && !selectedPreview)} onClick={() => {
+              if (selectedPreview) { setSelectedPreview(null); return; }
+              setDirectory(directory.split("/").slice(0, -1).join("/"));
+            }}>{t(selectedPreview ? "backToFiles" : "parent")}</Button>
           </div>
-          {!busy && !error && entries.length === 0 && <p>{t("emptyFiles")}</p>}
+          {!busy && !error && !file && entries.length === 0 && <p>{t("emptyFiles")}</p>}
           <div className="settings-stack">{entries.map((entry) => <Button variant="ghost" key={entry.name} disabled={busy}
             onClick={() => void open(entry)}>{entry.name}{entry.kind === "dir" ? "/" : ""}</Button>)}</div>
           {file && <section><h3>{file.path}</h3>{file.read.kind === "text"
             ? <pre>{file.read.content}</pre>
-            : <p>{t(file.read.kind === "tooLarge" ? "truncated" : "binary")}</p>}</section>}
+            : file.read.kind === "image"
+              ? <img src={file.read.dataUrl} alt={file.path} style={{ maxWidth: "100%" }} />
+              : <p>{t(file.read.kind === "tooLarge" ? "truncated" : "binary")}</p>}</section>}
         </>}
         {tab === "review" && diff && <>
           {diff.files.length === 0 && <p>{t("noChanges")}</p>}

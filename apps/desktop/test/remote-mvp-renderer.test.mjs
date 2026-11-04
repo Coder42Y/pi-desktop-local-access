@@ -239,3 +239,15 @@ test("remote interaction IPC reconciles real queues and detaches without touchin
   unsubscribe();
   assert.equal(listeners.size, 0);
 });
+
+test("legacy preview API calls are allowed without native file or local tool authority", async () => {
+  initialize(); useAppStore.setState({ sessions: [session], activeSessionId: session.id });
+  const calls = bridge((channel) => channel === IPC.invoke.fsResolveRef ? { match: null } : { kind: "missing" });
+  assert.deepEqual(await api.fsResolveRef("/outside/file.txt", session.id), { match: null });
+  await api.fsReadImageDataUrl("/outside/picture.png", undefined, session.id);
+  assert.deepEqual(calls.map(c => c.channel), [IPC.invoke.fsResolveRef, IPC.invoke.fsReadImageDataUrl]);
+  await assert.rejects(api.fsReveal("/outside/file.txt", session.id), { code: "CAPABILITY_UNAVAILABLE" });
+  await assert.rejects(api.fsOpen("/outside/file.txt", undefined, session.id), { code: "CAPABILITY_UNAVAILABLE" });
+  assert.equal(calls.length, 2);
+  assert.equal(sessionAllows(session, "canUseLocalTools"), false);
+});

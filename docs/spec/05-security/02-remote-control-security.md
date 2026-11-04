@@ -25,6 +25,20 @@ The security design assumes that an Agent can be prompt-injected. A prompt,
 tool result, attachment, or model output is untrusted data and MUST NOT grant
 an authority that the authenticated principal does not already have.
 
+### Customization: owner file-view scope
+
+The user-authorized Coder42Y candidate deliberately allows paired owners to
+preview explicit external absolute regular files over SSH, within the SSH OS
+account's existing read permissions. This applies only to workspace/files
+resolve/read/image and the new owner-only workspace/preview session adapter.
+The server resolves legacy session ownership/root; clients cannot replace it
+with a caller-supplied root in that adapter. Viewer reads, plugin scopes, model
+tools, directory browsing/index/search and project instruction loading remain
+contained. Relative paths and relative symlink escapes do not gain authority.
+No canUseLocalTools grant, credential change, mutation replay or local fallback.
+The trusted Desktop viewer receives the requested bytes, not a new tool grant.
+See [decision and compatibility](../../adr/ssh-external-file-preview.md).
+
 ## 2. Trust zones
 
 ```text

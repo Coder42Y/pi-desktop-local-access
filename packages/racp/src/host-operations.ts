@@ -5,7 +5,7 @@ import type {
   RacpProjectSummary,
   WorkspaceDiff,
   WorkspaceToolExecute, WorkspaceToolAbort, WorkspaceToolResult, CommandShellOption, WorkspaceFilesRequest,
-  WorkspacePluginFilesRequest, WorkspacePluginFilesResult,
+  WorkspacePluginFilesRequest, WorkspacePluginFilesResult, WorkspacePreviewRequest,
 } from "@pi-desktop/shared";
 
 /**
@@ -58,6 +58,8 @@ export interface RacpProjectCatalog {
 export interface RacpWorkspaceAccess {
   list(sessionId: string, path: string): Promise<{ entries: FsEntry[] }>;
   read(sessionId: string, path: string): Promise<FsReadResult>;
+  /** Optional for old Hosts; viewer read/list behavior is unchanged. */
+  preview?(input: WorkspacePreviewRequest): Promise<unknown>;
   diff(sessionId: string): Promise<WorkspaceDiff>;
 }
 

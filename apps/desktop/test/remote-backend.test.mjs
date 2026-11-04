@@ -505,3 +505,12 @@ test("an unknown channel is a bug and surfaces INTERNAL", async () => {
     (error) => error.errorCode === "INTERNAL",
   );
 });
+
+test("legacy preview channels stay remote and keep the original session identity", async () => {
+  const { backend, client } = makeBackend({ "workspace/preview": { match: null } });
+  for (const [channel, field, operation] of [[IPC.invoke.fsResolveRef, "ref", "resolve"], [IPC.invoke.fsReadImageDataUrl, "ref", "image"], [IPC.invoke.fsRead, "path", "read"]]) {
+    assert.equal(backend.handles(channel), true);
+    await backend.invoke(channel, [{ sessionId: REMOTE_SESSION_ID, [field]: "/outside/note.md" }]);
+    assert.deepEqual(client.calls.at(-1), { method: "workspace/preview", params: { sessionId: HOST_SESSION_ID, operation, ref: "/outside/note.md" } });
+  }
+});

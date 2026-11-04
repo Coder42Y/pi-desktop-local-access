@@ -11,6 +11,7 @@ repository visibility changes, remote publishing or a release.
 | NEXT-001 | Restore reliable update discovery and delivery for customized builds | Implementation candidate; native packaging/release pending | 0.21.0-local.2 candidate |
 | NEXT-002 | Reuse saved SSH connection configuration across conversations and application restarts | Backlog — requirements recorded; not started | To be scheduled |
 | NEXT-003 | Quote any selectable text in the composer with explicit model-facing quotation semantics | Backlog — requirements recorded; not started | To be scheduled |
+| NEXT-004 | Align and de-emphasize the SSH Upload indicator with explicit success/failure icons | Backlog — requirements recorded; not started | To be scheduled |
 
 ## NEXT-001 — Customized-build update delivery
 
@@ -153,10 +154,45 @@ multiline presentation and behavior across restart are not specified yet. Do
 not infer arbitrary system-wide selection access or additional OS permissions
 from this backlog item. No implementation or protocol/UI changes are started.
 
+## NEXT-004 — SSH Upload indicator presentation
+
+### Observed feedback
+
+The current screenshot shows an upward-arrow SSH Upload label with a separate
+secondary status line. The user finds this presentation visually abrupt beside
+other conversation elements.
+
+### Recorded requirements
+
+- Keep the label `SSH Upload`, styled in a subdued gray rather than visually
+  prominent text.
+- Align the label and row with neighboring conversation elements, using their
+  established spacing and baseline instead of a detached-looking block.
+- Put the upload status icon to the right of the label: a green check icon for
+  success, or a red cross icon for failure.
+- Use the application's actual icon components or SVG assets, not emoji or
+  platform-dependent emoji glyphs. Icon sizing and baseline should fit the row.
+- Provide an accessible status name so color and icon shape are not the only
+  way to distinguish success from failure.
+
+### Proposed acceptance criteria
+
+- The SSH Upload row shares the surrounding elements' alignment and visual
+  density; the label is gray and does not dominate the conversation.
+- Success and failure display the matching green check/red cross on the right,
+  using icons rather than emoji.
+- Upload outcome is represented correctly without changing transfer behavior.
+
+### Planning boundary
+
+This is a queued visual requirement only. It does not implement a redesign or
+change upload semantics. Treatment of the existing secondary detail line and
+in-progress/cancelled states remains to be decided during implementation.
+
 ## Scheduling
 
 NEXT-001 has an approved implementation candidate and public distribution source.
 Native macOS packaging, installed-build acceptance and publication remain pending;
-see the custom update runbook above. NEXT-002 and NEXT-003 are queued with the
+see the custom update runbook above. NEXT-002, NEXT-003 and NEXT-004 are queued with the
 requirements above recorded. Priority, implementation order and target versions
 remain to be scheduled; this documentation change does not authorize execution.
