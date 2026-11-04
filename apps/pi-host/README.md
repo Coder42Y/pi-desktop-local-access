@@ -83,6 +83,28 @@ creation. Active calls are owned by their originating connection and cancelled
 when it closes. Arguments/results are bounded to 1 MiB; operations are not
 replayed. Install a matching Host bundle before using this new workflow.
 
+## Customized external file preview (unreleased candidate)
+
+Paired owners may preview explicit absolute regular files outside a project.
+Relative paths and project discovery remain contained; this does not change
+model tools, plugins or OS read permissions. Legacy remote histories use the
+additive owner-only workspace/preview request; existing viewer read/list remain
+project-scoped. Both Desktop and Host must run the candidate; old Hosts do not
+silently gain the behavior from a Desktop upgrade alone.
+
+After building the JS workspace, run the isolated full journey with an existing
+Chromium executable (no browser profile or production credentials are reused):
+
+```sh
+PI_CHROMIUM_EXECUTABLE=/path/to/chromium node scripts/e2e-ssh-external-preview.mjs
+```
+
+The test creates temporary React UI/profile/files and an authenticated loopback
+RACP socket, then checks text/image display, missing files, owner/viewer roles,
+stale session responses and disconnected no-fallback. It never installs pi-host
+on a user server or invokes a real model. See
+[security decision](../../docs/adr/ssh-external-file-preview.md).
+
 ## Legacy remote-Agent provider import operational behavior
 
 The UI sends only IDs to Main. Main sends a version-1 payload over SSH stdin to

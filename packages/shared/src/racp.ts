@@ -111,6 +111,15 @@ export const WorkspaceFilesRequestSchema = Type.Object({
 }, { additionalProperties: false });
 export type WorkspaceFilesRequest = Static<typeof WorkspaceFilesRequestSchema>;
 
+/** Owner UI preview against a server-resolved legacy session root. */
+export const WorkspacePreviewRequestSchema = Type.Object({
+  sessionId: Type.String({ minLength: 1, maxLength: 4096 }),
+  operation: Type.Union([Type.Literal("resolve"), Type.Literal("read"), Type.Literal("image")]),
+  ref: Type.String({ minLength: 1, maxLength: 4096 }),
+  mimeType: Type.Optional(Type.String({ maxLength: 256 })),
+}, { additionalProperties: false });
+export type WorkspacePreviewRequest = Static<typeof WorkspacePreviewRequestSchema>;
+
 /** Plugin reads carry the admitted read scope; no remote write operation exists. */
 export const WorkspacePluginFilesRequestSchema = Type.Object({
   path: Type.String({ minLength: 1, maxLength: 4096 }),
@@ -614,6 +623,7 @@ export const RACP_OPERATIONS = {
   "session/compact": { role: "controller", profile: "remote-host", mutation: true },
   "workspace/list": { role: "viewer", profile: "remote-host", mutation: false },
   "workspace/read": { role: "viewer", profile: "remote-host", mutation: false },
+  "workspace/preview": { role: "owner", profile: "remote-host", mutation: false },
   "workspace/diff": { role: "viewer", profile: "remote-host", mutation: false },
   "workspace/toolExecute": { role: "owner", profile: "remote-host", mutation: true },
   "workspace/toolAbort": { role: "owner", profile: "remote-host", mutation: true },

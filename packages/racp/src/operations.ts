@@ -3,7 +3,7 @@ import { RacpError } from "@pi-desktop/agent-host";
 import {
   RacpApprovalResponseSchema,
   WorkspaceToolExecuteSchema, WorkspaceToolAbortSchema, WorkspaceFilesRequestSchema,
-  WorkspacePluginFilesRequestSchema,
+  WorkspacePluginFilesRequestSchema, WorkspacePreviewRequestSchema,
   RacpCursorSchema,
   RacpInputResponseSchema,
   RacpRequestContextSchema,
@@ -366,6 +366,12 @@ export function createOperations(): Map<RacpOperation, OperationHandler> {
     const input = check(WorkspacePathParams, params);
     if (!input.path) throw new RacpError("INVALID_ARGUMENT", "path is required");
     return context.operations.workspace.read(input.sessionId, input.path);
+  });
+  handlers.set("workspace/preview", async (context, params) => {
+    if (!context.operations.workspace.preview) {
+      throw new RacpError("CAPABILITY_UNAVAILABLE", "this Host does not offer session file previews");
+    }
+    return context.operations.workspace.preview(check(WorkspacePreviewRequestSchema, params));
   });
   handlers.set("workspace/diff", async (context, params) => {
     const input = check(SessionIdParams, params);

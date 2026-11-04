@@ -1,5 +1,5 @@
-import { useChatSessionCapability } from "./use-chat-session-capability";
-import { sessionAllows } from "../lib/remote-session-safety";
+import { useChatFilePreviewCapability, useChatSessionCapability } from "./use-chat-session-capability";
+import { canReadFilePreviews, isRemoteSession } from "../lib/remote-session-safety";
 import { useSlotSessionId } from "../plugins/renderer-slots/use-slots";
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,23 +30,25 @@ import {
  */
 export function useOpenPreviewTarget() {
   const localToolsAllowed = useChatSessionCapability("canUseLocalTools");
+  const filePreviewsAllowed = useChatFilePreviewCapability();
   const openFileRef = useOpenChatFileRef();
   return useCallback(
     (target: ChatPreviewTarget) => {
-      if (!localToolsAllowed) return;
       if (target.kind === "file") {
+        if (!filePreviewsAllowed) return;
         return openFileRef(target.path, undefined, undefined, {
           line: target.line,
           column: target.column,
         });
       }
+      if (!localToolsAllowed) return;
       if (target.kind === "session") {
         void useAppStore.getState().selectSession(target.sessionId).catch(() => undefined);
         return;
       }
       openHttpUrl(target.url);
     },
-    [localToolsAllowed, openFileRef],
+    [filePreviewsAllowed, localToolsAllowed, openFileRef],
   );
 }
 
@@ -175,14 +177,14 @@ function useResolveChatFileRef() {
       const state = useAppStore.getState();
       const ownerId = paneSessionId || state.activeSessionId;
       const session = state.sessions.find((item) => item.id === ownerId);
-      if (!sessionAllows(session ?? (ownerId?.startsWith("remote:") ? { id: ownerId } : undefined), "canUseLocalTools")) return null;
+      if (!canReadFilePreviews(session ?? (ownerId?.startsWith("remote:") ? { id: ownerId } : undefined))) return null;
       const raw = String(path ?? "").trim();
       if (!raw) return null;
       // `./x` and `../x` are the one shape the caller resolves better than the
       // main process can: the base is the markdown file on screen, which only
       // the caller knows. Everything else is completed against the roots.
       const anchored = isDotRelative(raw)
-        ? toWorkspaceRel(raw, workspacePath, baseDir)
+        ? toWorkspaceRel(raw, isRemoteSession(session) ? null : workspacePath, baseDir)
         : null;
       let result;
       try {
@@ -270,6 +272,9 @@ export function useOpenChatFileRef() {
         const resolved = await resolveRef(path, baseDir);
         if (!resolved) return;
         const current = useAppStore.getState();
+        const remoteFiles = Boolean(current.workspace?.remote)
+          || isRemoteSession(current.sessions.find((item) => item.id === sessionId))
+          || sessionId?.startsWith("remote:") === true;
         if (
           (current.workspace?.path ?? null) !== workspacePath ||
           current.activeSessionId !== sessionId
@@ -277,7 +282,7 @@ export function useOpenChatFileRef() {
           return;
         }
         if (destination === "reveal-in-folder") {
-          if (current.workspace?.remote) {
+          if (remoteFiles) {
             showToast(t("chat.fileManagerOpenFailed"), { variant: "error" });
             return;
           }
@@ -289,7 +294,7 @@ export function useOpenChatFileRef() {
           return;
         }
         if (destination === "file-manager") {
-          if (current.workspace?.remote) {
+          if (remoteFiles) {
             showToast(t("chat.fileManagerOpenFailed"), { variant: "error" });
             return;
           }
@@ -314,7 +319,7 @@ export function useOpenChatFileRef() {
         }
         if (destination === "built-in-browser") {
           if (
-            current.workspace?.remote ||
+            remoteFiles ||
             !hasPluginView(current.pluginViews, BROWSER_PLUGIN_TAB)
           ) {
             showToast(t("chat.builtInBrowserUnavailable"), {
@@ -326,7 +331,7 @@ export function useOpenChatFileRef() {
           return;
         }
         if (destination === "default-browser") {
-          if (current.workspace?.remote) {
+          if (remoteFiles) {
             showToast(t("chat.defaultBrowserOpenFailed"), {
               variant: "error",
             });
@@ -343,7 +348,7 @@ export function useOpenChatFileRef() {
         }
         const hasPosition = line !== undefined || column !== undefined;
         if (
-          !current.workspace?.remote &&
+          !remoteFiles &&
           !hasPosition &&
           (resolved.inProject || resolved.scratch) &&
           isHtmlFilePath(resolved.absolutePath)
@@ -355,7 +360,7 @@ export function useOpenChatFileRef() {
           openUrl(resolved.absolutePath);
           return;
         }
-        if (!current.workspace?.remote && resolved.inProject && !hasPosition) {
+        if (!remoteFiles && resolved.inProject && !hasPosition) {
           if (await ensureFileManagerView(workspacePath)) {
             const latest = useAppStore.getState();
             if (

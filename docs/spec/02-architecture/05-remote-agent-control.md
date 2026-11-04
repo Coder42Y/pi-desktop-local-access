@@ -208,6 +208,18 @@ Host uses its existing Rust RPC connection; the CLI never starts another databas
 writer. Configuration and credentials never cross RACP or return to the renderer.
 See `docs/adr/remote-provider-import.md` and security §3.5.
 
+**Customized external file previews.** In the Coder42Y customization, the paired
+owner may resolve and preview explicit absolute regular files outside the current
+project through workspace/files. Only resolve/read/image are broadened; relative
+traversal, shorthand discovery, list/index/diff/instructions, plugins and tools
+retain their existing scopes. Legacy remote sessions use the additive owner-only
+workspace/preview request (sessionId, operation, ref, optional mimeType); the Host
+looks up the session root. Viewer workspace/read/list remain project-contained.
+Both modes refuse local OS/plugin fallback and honor OS permissions, size and
+MIME limits. Old missing worktree paths report missing rather than scope denial.
+Older Hosts fail closed; matching updated Host and Desktop builds are required.
+See [external SSH preview ADR](../../adr/ssh-external-file-preview.md).
+
 **Desktop remote workspaces.** New projects are ordinary locally owned logical
 project groups with an additive `{hostKey, path}` remote workspace binding.
 The shared Create project dialog keeps the user-selected name locally and opens

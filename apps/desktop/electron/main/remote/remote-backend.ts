@@ -9,6 +9,7 @@
  * speaks RACP-WS to the remote `pi-host`; the renderer is unaware of the
  * transport (spec §3.4). Unsupported remote channels fail closed in the router.
  */
+import { isAbsolute } from "node:path";
 import { ErrorCodes, IPC } from "@pi-desktop/shared";
 import type {
   AgentCompactResponse,
@@ -91,9 +92,22 @@ const HANDLED_CHANNELS: ReadonlySet<string> = new Set([
   IPC.invoke.plansResolve,
   IPC.invoke.plansPending,
   IPC.invoke.fsList,
+  IPC.invoke.fsResolveRef,
+  IPC.invoke.fsReadImageDataUrl,
   IPC.invoke.fsRead,
   IPC.invoke.workspaceDiff,
 ]);
+
+function previewRefFor(channel: string, args: readonly unknown[]) {
+  const input = args[0] as { ref?: unknown; path?: unknown; mimeType?: unknown };
+  const ref = channel === IPC.invoke.fsRead ? input.path : input.ref;
+  if (typeof ref !== "string" || !ref.trim() || ref.length > 4096 || ref.includes("\0")) {
+    throw Object.assign(new Error("invalid remote file reference"), { errorCode: ErrorCodes.INVALID_ARGUMENT });
+  }
+  const operation = channel === IPC.invoke.fsRead ? "read"
+    : channel === IPC.invoke.fsResolveRef ? "resolve" : "image";
+  return { operation, ref, ...(typeof input.mimeType === "string" ? { mimeType: input.mimeType } : {}) };
+}
 
 export function createRemoteBackend(options: RemoteBackendOptions): RemoteBackend {
   const { hostKey, client } = options;
@@ -254,6 +268,11 @@ export function createRemoteBackend(options: RemoteBackendOptions): RemoteBacken
         const input = typeof args[0] === "object" ? args[0] as RemoteHistoryReadOptions : {};
         return { session: await history.read(remoteSessionId, hostIdFor(args), input) };
       }
+      case IPC.invoke.fsResolveRef:
+      case IPC.invoke.fsReadImageDataUrl:
+        return client.request("workspace/preview", {
+          sessionId: hostIdFor(args), ...previewRefFor(channel, args),
+        });
       case IPC.invoke.fsList:
       case IPC.invoke.fsRead:
       case IPC.invoke.workspaceDiff: {
@@ -261,6 +280,11 @@ export function createRemoteBackend(options: RemoteBackendOptions): RemoteBacken
         const path = input.path ?? "";
         if (typeof path !== "string" || path.length > 4096 || path.includes("\0")) {
           throw Object.assign(new Error("invalid remote path"), { errorCode: ErrorCodes.INVALID_ARGUMENT });
+        }
+        if (channel === IPC.invoke.fsRead && isAbsolute(path)) {
+          return client.request("workspace/preview", {
+            sessionId: hostIdFor(args), ...previewRefFor(channel, args),
+          });
         }
         const method = channel === IPC.invoke.fsList ? "workspace/list"
           : channel === IPC.invoke.fsRead ? "workspace/read" : "workspace/diff";

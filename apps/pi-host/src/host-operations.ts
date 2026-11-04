@@ -222,6 +222,7 @@ export function createProjectCatalog(deps: HostOperationsDeps): RacpProjectCatal
 /** Workspace reads against the session's durable root, on the Host's filesystem. */
 export function createWorkspaceAccess(deps: HostOperationsDeps): RacpWorkspaceAccess {
   const { getHost } = deps;
+  const files = createWorkspaceFiles();
   async function sessionRoot(sessionId: string): Promise<string> {
     const host = requireHost(getHost);
     const result = await host.call<{ session?: HostSessionRecord | null }>("session.get", { id: sessionId, messageLimit: 1 }).catch(hostError);
@@ -245,6 +246,12 @@ export function createWorkspaceAccess(deps: HostOperationsDeps): RacpWorkspaceAc
     async read(sessionId, path) {
       const root = await sessionRoot(sessionId);
       return readWorkspaceFile(root, path).catch(forbidden);
+    },
+    async preview(input) {
+      return files.read({
+        path: await sessionRoot(input.sessionId), operation: input.operation,
+        ref: input.ref, ...(input.mimeType ? { mimeType: input.mimeType } : {}),
+      });
     },
     async diff(sessionId) {
       return collectWorkspaceDiff(await sessionRoot(sessionId));

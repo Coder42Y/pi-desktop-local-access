@@ -16,6 +16,11 @@ export function sessionAllows(
   return session?.capabilities?.[capability] !== false;
 }
 
+/** Remote previews use the remote read capability, never local-tool authority. */
+export function canReadFilePreviews(session?: Pick<SessionSummary, "id" | "source" | "capabilities">): boolean {
+  return sessionAllows(session, isRemoteSession(session) ? "canReadWorkspace" : "canUseLocalTools");
+}
+
 /** A remote path is display data, not an Electron workspace activation target. */
 export function safeSessionSummary<T extends SessionSummary>(session: T): T {
   if (!isRemoteSession(session)) return session;
