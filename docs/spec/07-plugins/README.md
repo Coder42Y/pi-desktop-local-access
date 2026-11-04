@@ -48,3 +48,17 @@ Lifecycle proposals, background-audio types without a device backend, signing
 plans, and center-server architecture are explicitly distinguished from shipped
 runtime APIs. Review pages under `docs/plugin-plan` may describe unimplemented
 hooks; they are not an additional public API.
+
+## User-authored plugin source (custom repository)
+
+Coder42Y's independent plugin sources live in `plugins/<plugin-directory>/`,
+separate from bundled application plugins. Source registration does not install
+or activate a plugin. Shared tests and test-only dependencies live under the
+private `plugins` workspace. Runtime settings, keys, generated .piplug files
+and distribution archives are excluded.
+
+The SSH Upload 0.2.3 candidate uses a compact gray Composer control with adjacent
+SVG success/failure indicators. Settled details remain accessible and failure
+cancellation is preserved. Progress, configure/resume, transfer and persistence
+logic are unchanged. See the delivery record under
+`docs/Process/ssh-upload-plugin-ui/`.

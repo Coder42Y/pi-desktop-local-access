@@ -19545,3 +19545,18 @@ their separate platform acceptance.
   API calls. `local-file-access.test.mjs` separately verifies the real reveal
   IPC handler, including external files and remote denials. Native Finder window
   clicking is not performed by these fixtures.
+
+#### E2E-PLUGIN-user-ssh-upload-compact-control
+
+- Load the actual user plugin renderer against fixture host/RPC boundaries in
+  an isolated Chromium profile. No live Desktop or real SSH credentials.
+- Remote idle: gray label, no leading arrow, aligned to neighboring controls.
+- Verified paste success: adjacent green SVG with accessible detail, not a long
+  visible secondary line or emoji.
+- Paste failure: adjacent red SVG, accessible failure/cancel name; clicking it
+  cancels the same existing placeholder workflow and unblocks recovery.
+- Progress/configure/resume/context errors remain visible and local sessions
+  stay inactive. Run existing dialog, real paste/drop and session-switch suites.
+- Commands: `pnpm --filter @pi-desktop/user-plugins test` and explicit browser
+  `test:ui` command with SSH_UPLOAD_REAL_TEST=0 and an existing Chromium.
+- Installed-plugin, native Finder drag and real SSH acceptance are separate gates.
