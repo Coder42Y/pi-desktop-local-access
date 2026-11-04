@@ -1,3 +1,4 @@
+import { safeUpdateDiagnostic } from "./custom-update";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -43,7 +44,7 @@ export class UpdateCacheMaintenance {
         "updater",
         "warn",
         "failed to discard the downloaded update",
-        { data: { detail: String(error) } },
+        { data: { code: safeUpdateDiagnostic(error) } },
       );
     }
   }
@@ -58,14 +59,14 @@ export class UpdateCacheMaintenance {
         "updater",
         "info",
         "adopted the relocated update cache",
-        { data: { cacheDir: dirs.active } },
+        { data: { adopted: true } },
       );
     } catch (error) {
       this.logger.app(
         "updater",
         "warn",
         "failed to adopt the relocated update cache",
-        { data: { detail: String(error) } },
+        { data: { code: safeUpdateDiagnostic(error) } },
       );
     }
   }
@@ -82,7 +83,7 @@ export class UpdateCacheMaintenance {
         "updater",
         "warn",
         "update feed configuration unavailable",
-        { data: { detail: String(error) } },
+        { data: { code: safeUpdateDiagnostic(error) } },
       );
       return null;
     }

@@ -5,6 +5,7 @@ export class StubAutoUpdater extends EventEmitter {
   autoInstallOnAppQuit = false;
   allowPrerelease = false;
   logger = null;
+  setFeedURL() {}
 }
 
 export class NsisUpdater extends StubAutoUpdater {

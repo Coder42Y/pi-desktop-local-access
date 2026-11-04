@@ -115,8 +115,8 @@ test("updater gates delivery mode by platform and delivery policy", () => {
   assert.match(updaterSource, /if \(!preferenceChanged\) return/);
   assert.match(
     updaterSource,
-    /allowPrerelease = false/,
-    "prerelease installs must still track the stable GitHub latest release",
+    /allowPrerelease = true/,
+    "custom installs track the local prerelease channel",
   );
   assert.match(updaterSource, /quitAndInstall/);
   assert.match(
@@ -141,7 +141,7 @@ test("updater gates delivery mode by platform and delivery policy", () => {
   assert.match(updaterSource, /autoUpdater\.on\("error"/);
   assert.match(
     updaterSource,
-    /github\.com\/vastsa\/PI-Desktop\/releases/,
+    /RELEASES_URL = CUSTOM_RELEASES_URL/,
     "releases fallback URL",
   );
   assert.match(
@@ -257,8 +257,8 @@ test("packaging publishes an electron-updater feed for GitHub Releases", async (
   const pkg = JSON.parse(pkgSource);
   assert.ok(pkg.dependencies["electron-updater"], "electron-updater dependency");
   assert.equal(pkg.build.publish[0].provider, "github");
-  assert.equal(pkg.build.publish[0].owner, "vastsa");
-  assert.equal(pkg.build.publish[0].repo, "PI-Desktop");
+  assert.equal(pkg.build.publish[0].owner, "Coder42Y");
+  assert.equal(pkg.build.publish[0].repo, "pi-desktop-local-access");
   const windowsUpdateConfigResource = pkg.build.win.extraResources.find(
     ({ from }) => from === "resources/app-update.yml",
   );
@@ -282,6 +282,8 @@ test("packaging publishes an electron-updater feed for GitHub Releases", async (
     provider: pkg.build.publish[0].provider,
     owner: pkg.build.publish[0].owner,
     repo: pkg.build.publish[0].repo,
+    channel: "local",
+    private: "false",
     updaterCacheDirName: `${pkg.name.replaceAll("/", "")}-updater`,
   });
   const macTargets = pkg.build.mac.target.map((entry) => entry.target);

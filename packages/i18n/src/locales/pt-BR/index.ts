@@ -175,6 +175,8 @@ export const ptBR = {
     checkForUpdates: "Verificar atualizações…"
   },
   updates: {
+    actionFailed: "Não foi possível concluir a ação de atualização. Tente novamente.",
+    checkFailed: "Não foi possível verificar atualizações. Tente novamente ou visite a página de versões.",
     title: "Atualizações",
     desc: "As atualizações são baixadas do GitHub Releases.",
     preferenceTitle: "Comportamento das atualizações",

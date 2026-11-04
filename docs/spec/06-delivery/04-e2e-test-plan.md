@@ -6338,6 +6338,24 @@ must keep splitting are covered by `markdown-blocks.test.mjs`.
 - **Status**: Unit-covered (`auto-update.test.mjs` asserts
   `allowPrerelease = false`); packaged discovery scenario Draft
 
+#### E2E-UPDATE-custom-public-local-channel (NEXT-001)
+
+- Supersedes E2E-067A's stable-channel expectation for this custom distribution only.
+- Path: Settings/menu check -> Main controller -> actual GitHub provider -> local
+  semver tag -> platform metadata -> available -> custom release link.
+- Saved Automatic preference on ad-hoc macOS remains manual; no download,
+  install-on-quit or explicit installer execution. Channel assignment must not
+  enable downgrade. Current version is 0.21.0-local.2; older tags remain archives.
+- Failure/retry: event and rejection-only errors settle state and reject only
+  localized safe text. All updater logger levels retain fixed diagnostic
+  categories, never raw headers/cookies/tokens/URLs. Retry can discover a version.
+- Metadata: builder-generated local-mac.yml matches version, contained regular
+  artifact paths, architecture, size and SHA-512; malformed/corrupt artifacts fail.
+- Automated: custom-update-delivery.test.mjs, custom-update-provider.test.mjs,
+  update-preference.test.mjs and scripts/check-custom-update-release.test.mjs.
+- Server coverage does not qualify native macOS packaging/installation. One
+  manual bootstrap from local.1 is required; packaged discovery remains NOT RUN.
+
 #### E2E-067B: Shipped-locale update notes and full changelog dialog (D164/D345/D349)
 
 - **Preconditions**: The shipped `packages/shared` CHANGELOG contains aligned

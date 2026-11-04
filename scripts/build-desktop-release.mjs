@@ -1,6 +1,9 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 
+import { CUSTOM_UPDATE_PREFLIGHT_ERROR, verifyCustomUpdateRelease } from "./check-custom-update-release.mjs";
+import { readFile } from "node:fs/promises";
+
 const forwardedArgs = process.argv.slice(2);
 
 const hostTarget =
@@ -78,4 +81,14 @@ if (target === "win") {
     "never",
     ...forwardedArgs,
   ]);
+}
+
+if (target === "mac") {
+  const pkg = JSON.parse(await readFile(new URL("../apps/desktop/package.json", import.meta.url), "utf8"));
+  try {
+    await verifyCustomUpdateRelease("release", pkg.build.extraMetadata.version);
+  } catch {
+    console.error(CUSTOM_UPDATE_PREFLIGHT_ERROR);
+    process.exitCode = 1;
+  }
 }

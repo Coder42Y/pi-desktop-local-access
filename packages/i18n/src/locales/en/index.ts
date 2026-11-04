@@ -183,6 +183,8 @@ export const en = {
     checkForUpdates: "Check for Updates…",
   },
   updates: {
+    actionFailed: "Could not complete the update action. Please try again.",
+    checkFailed: "Could not check for updates. Please try again or visit the releases page.",
     title: "Updates",
     desc: "Updates are downloaded from GitHub Releases.",
     preferenceTitle: "Update behavior",

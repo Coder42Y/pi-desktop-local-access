@@ -1,5 +1,8 @@
 # Server Development Handoff
 
+> Historical intake snapshot. For the subsequently approved NEXT-001 repair and
+> public distribution decision, see [Custom update delivery](CUSTOM-UPDATE-DELIVERY.md).
+
 ## Starting point
 
 Repository: https://github.com/Coder42Y/pi-desktop-local-access (private).
@@ -21,7 +24,7 @@ No credentials or machine-local configuration are stored in this document.
 
 - [Next iteration backlog](NEXT-ITERATION.md): update delivery and SSH-session
   experience. Both are queued, not implemented or approved for implementation.
-- [Customization provenance](../../LOCAL_CUSTOMIZATION.md).
+- [Customization provenance](https://github.com/Coder42Y/pi-desktop-local-access/blob/docs/next-iteration-backlog/LOCAL_CUSTOMIZATION.md).
 - [Finder implementation and verification](../Process/finder-file-menu/design.md).
 - [Publication record](../Process/local-v0.21.0-1/design.md).
 - Root `AGENTS.md` and applicable scoped rules before editing.

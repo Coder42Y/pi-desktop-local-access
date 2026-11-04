@@ -8,14 +8,18 @@ repository visibility changes, remote publishing or a release.
 
 | ID | Item | Status | Target version |
 |---|---|---|---|
-| NEXT-001 | Restore reliable update discovery and delivery for customized builds | Backlog — not started | To be scheduled |
+| NEXT-001 | Restore reliable update discovery and delivery for customized builds | Implementation candidate; native packaging/release pending | 0.21.0-local.2 candidate |
 | NEXT-002 | Improve SSH remote-session usability and interaction consistency, using Claude App as the experience benchmark | Backlog — scope to be refined | To be scheduled |
 
 ## NEXT-001 — Customized-build update delivery
 
+> Current candidate and approved public-distribution decision:
+> [Custom update delivery](CUSTOM-UPDATE-DELIVERY.md). The observations and planning
+> notes below are the original intake snapshot, not current implementation status.
+
 ### Observed problem
 
-The installed `0.21.0-local.1` build fails update discovery with HTTP 404 when
+At intake, the installed `0.21.0-local.1` build failed update discovery with HTTP 404 when
 requesting `https://github.com/Coder42Y/pi-desktop-local-access/releases.atom`.
 The source/release repository is private and the updater is using anonymous
 GitHub release discovery. GitHub CLI authentication is not automatically shared
@@ -92,5 +96,6 @@ implementation, UI redesign or remote-access permission changes are started.
 
 ## Scheduling
 
-Both items are queued for the next iteration discussion. Priority, owners,
-implementation order, acceptance details and release version remain to be agreed.
+NEXT-001 has an approved implementation candidate and public distribution source.
+Native macOS packaging, installed-build acceptance and publication remain pending;
+see the custom update runbook above. NEXT-002 remains queued with scope to refine.
