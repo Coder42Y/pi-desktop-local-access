@@ -9,7 +9,8 @@ repository visibility changes, remote publishing or a release.
 | ID | Item | Status | Target version |
 |---|---|---|---|
 | NEXT-001 | Restore reliable update discovery and delivery for customized builds | Implementation candidate; native packaging/release pending | 0.21.0-local.2 candidate |
-| NEXT-002 | Improve SSH remote-session usability and interaction consistency, using Claude App as the experience benchmark | Backlog — scope to be refined | To be scheduled |
+| NEXT-002 | Reuse saved SSH connection configuration across conversations and application restarts | Backlog — requirements recorded; not started | To be scheduled |
+| NEXT-003 | Quote any selectable text in the composer with explicit model-facing quotation semantics | Backlog — requirements recorded; not started | To be scheduled |
 
 ## NEXT-001 — Customized-build update delivery
 
@@ -81,21 +82,81 @@ unapproved and unscheduled.
 Improve the usability and interaction consistency of SSH remote sessions,
 using Claude App as the experience benchmark.
 
+### Recorded requirement — configure once, reuse after restart
+
+The SSH connection entry (referred to by the user as the SSH plugin) should
+retain a completed connection configuration. Once configured, the user should
+not need to configure it repeatedly inside the conversation dialog, including
+after quitting and restarting the application.
+
+### Proposed acceptance criteria
+
+- Configure an SSH target once and use it in a conversation.
+- Reopen the conversation or use the same configured target in another
+  conversation without repeating the setup dialog.
+- Quit and restart the application; the saved target configuration is still
+  available without re-entering the same configuration.
+- Reuse the configuration for the correct target; do not mix different hosts'
+  settings or silently broaden remote-access permissions.
+- Preserve secure credential handling. This requirement does not authorize
+  plaintext secret storage or bypassing required authentication/key unlocking.
+
 ### Planning boundary
 
-This item records the user's product direction only. The specific Claude App
-experience being referenced, current workflow pain points, comparison scenarios
-and desired behavior need to be clarified before design or implementation.
-It does not assert that Claude App exposes a particular SSH feature or require
-an exact visual clone.
+The concrete gap is configuration reuse, not a commitment to automatic
+connection, a permanently live SSH session or a complete reconnection redesign.
+The specific connection entry, configuration ownership and remaining interaction
+details must be checked against the code before implementation. Claude App
+remains an experience benchmark, not a claim about its SSH capabilities.
+This is backlog documentation only; implementation has not started.
 
-The eventual proposal should identify concrete interaction gaps and agree on
-scope and acceptance criteria with the user. No specific connection, message,
-file, authentication or reconnection behavior is committed by this entry. No
-implementation, UI redesign or remote-access permission changes are started.
+## NEXT-003 — Quote selected text into the composer
+
+### Product objective
+
+Allow the user to select text and quote it into the conversation composer,
+then send it to the model as clearly identified quoted content.
+
+### Recorded requirements
+
+- Support text selected from model replies and from the user's own messages.
+  The scope is not limited to those message roles: any selectable text in the
+  application's accessible UI may be quoted.
+- Insert the selected text into the composer as a quote that is included when
+  the user sends the message.
+- Present the quote as a text passage enclosed in quotation marks, with a
+  subtle gray background. No elaborate card or broader visual redesign is
+  requested.
+- Make the quotation explicit in what the model receives, not only in visual
+  styling. The model must be able to distinguish quoted material from the
+  user's surrounding request. Quoted text must not acquire a higher-priority
+  instruction role merely because it was quoted.
+
+### Proposed acceptance criteria
+
+- Select text in a model reply, invoke Quote, and see that text appear as a
+  quoted passage in the composer.
+- Repeat with a user message and other selectable text; quotation is not
+  restricted to model answers.
+- Before sending, the quote is recognizable through quotation marks and a
+  subtle gray background, retaining the selected text.
+- Send a message containing a quote and an accompanying request; the model's
+  input explicitly marks the quoted passage and separates it from the request.
+- The quote remains explicit without relying on background color reaching the
+  model. Plain text must not be silently rendered as a quote but sent without
+  any quotation indication.
+
+### Planning boundary
+
+The selection action's placement and keyboard behavior, exact message encoding,
+multiline presentation and behavior across restart are not specified yet. Do
+not infer arbitrary system-wide selection access or additional OS permissions
+from this backlog item. No implementation or protocol/UI changes are started.
 
 ## Scheduling
 
 NEXT-001 has an approved implementation candidate and public distribution source.
 Native macOS packaging, installed-build acceptance and publication remain pending;
-see the custom update runbook above. NEXT-002 remains queued with scope to refine.
+see the custom update runbook above. NEXT-002 and NEXT-003 are queued with the
+requirements above recorded. Priority, implementation order and target versions
+remain to be scheduled; this documentation change does not authorize execution.
