@@ -1,0 +1,16 @@
+{
+  "name": "@pi-desktop/user-plugins",
+  "version": "0.21.0",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/ssh-upload.test.cjs tests/ssh-upload-hooks.test.cjs tests/ssh-upload-paste-store.test.cjs tests/ssh-upload-renderer.test.mjs tests/ssh-upload-profiles.test.cjs tests/ssh-upload-profile-restart.test.cjs",
+    "test:ui": "node --test tests/ssh-upload-ui.test.cjs tests/ssh-upload-auto-paste.test.cjs tests/ssh-upload-drop.test.cjs tests/ssh-upload-status.test.cjs",
+    "lint": "node --check ssh-upload/main.js && node --check ssh-upload/renderer/index.mjs && node --check ssh-upload/renderer/status.mjs && node --check ssh-upload/profiles.cjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "esbuild": "0.25.12",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
+  }
+}

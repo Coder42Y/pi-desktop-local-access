@@ -2,6 +2,7 @@ packages:
   - apps/*
   - packages/*
   - docs
+  - plugins
 allowBuilds:
   '@google/genai': true
   electron: true

@@ -1,0 +1,10 @@
+**/dist/
+**/node_modules/
+**/*.piplug
+**/.env*
+**/*.pem
+**/*.key
+**/config.local.json
+**/runtime-data/
+**/settings.json
+**/profiles.local.json

@@ -48,3 +48,28 @@ Lifecycle proposals, background-audio types without a device backend, signing
 plans, and center-server architecture are explicitly distinguished from shipped
 runtime APIs. Review pages under `docs/plugin-plan` may describe unimplemented
 hooks; they are not an additional public API.
+
+## User-authored plugin source (custom repository)
+
+Coder42Y's independent plugin sources live in `plugins/<plugin-directory>/`,
+separate from bundled application plugins. Source registration does not install
+or activate a plugin. Shared tests and test-only dependencies live under the
+private `plugins` workspace. Runtime settings, keys, generated .piplug files
+and distribution archives are excluded.
+
+The SSH Upload 0.3.0 candidate retains the compact gray control/SVG outcomes and
+adds server-level connection metadata plus project-specific relative directories
+for new SSH workspace projects. Save once per stable Host, restore through SDK
+settings, and derive each project's default folder from its current root. Legacy
+matching remains per-context. Unknown inner settings versions fail without reset;
+stale contexts/results cannot reuse another binding. Permissions and authentication
+are unchanged. See `docs/Process/ssh-upload-profile-reuse/` and the shared-profiles
+ADR for one-time old-target confirmation and host SDK durability limits.
+
+
+Manual Insert prepares its verified replacement before enabling the button. A
+trusted user click dispatches composer.replaceDraft synchronously, before any
+queued RPC or await can lose the Host gesture. Prepared state is bound to the
+job, session, project binding, configuration and draft generation, and disabled
+while another dialog action or settings save is pending. The Host gesture and
+generation guards remain authoritative; synthetic clicks do not gain permission.

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "local.ssh-upload",
+  "name": "SSH Upload",
+  "version": "0.3.0",
+  "description": "Upload pasted or dropped files in remote conversations and SSH workspace projects. Uses read-only project/get to keep uploads inside the remote workspace. Key authentication only.",
+  "main": "main.js",
+  "renderer": "renderer/index.mjs",
+  "rendererActions": ["plugin.call", "composer.readDraft", "composer.replaceDraft"],
+  "rendererCallMethods": ["context", "saveConfig", "select", "poll", "start", "cancel", "verifySession", "pasteBegin", "pasteChunk", "pasteFinish", "pastePoll", "pasteCancel"],
+  "permissions": ["renderer.extension", "desktop.control"],
+  "contributes": {
+    "settings": [
+      { "key": "profiles", "type": "string", "default": "{}", "title": "SSH destinations (JSON, no passwords)" },
+      { "key": "connections", "type": "string", "default": "{\"version\":1,\"hosts\":{}}", "title": "Shared SSH server connections (JSON, no passwords)" },
+      { "key": "projectDirectories", "type": "string", "default": "{\"version\":1,\"projects\":{}}", "title": "SSH project upload directories (JSON)" }
+    ]
+  },
+  "engines": { "piDesktop": ">=0.21.0" },
+  "activationEvents": ["onStartup"],
+  "i18n": {
+    "en": { "name": "SSH Upload", "description": "Upload pasted or dropped files in SSH projects and remote conversations. Reads project metadata through desktop control; no passwords stored." },
+    "zh-CN": { "name": "SSH 文件上传", "description": "支持 SSH 项目与远程会话中的文件拖拽、粘贴上传；通过桌面控制接口只读查询项目，自动放入远程工作区。本机会话不接管，不保存密码。" }
+  }
+}

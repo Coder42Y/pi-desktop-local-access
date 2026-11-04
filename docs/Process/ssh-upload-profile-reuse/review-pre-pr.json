@@ -1,0 +1,16 @@
+{
+  "slug": "ssh-upload-profile-reuse",
+  "verdict": "pass",
+  "critical_count": 0,
+  "informational_count": 1,
+  "critical": [],
+  "informational": [
+    {
+      "severity": "P2",
+      "finding": "Save could overtake upload admission across metadata await",
+      "resolved": true,
+      "verification": "Pre-gate snapshot regression failed; operation exclusion and write-time checks passed all gated cases and full suite"
+    }
+  ],
+  "summary": "Single review finding fixed and retested; native/SDK outer-file limits remain explicit."
+}
