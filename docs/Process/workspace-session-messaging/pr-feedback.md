@@ -21,7 +21,8 @@ isolated CI browser launch, never production browser preferences.
 - [x] Shared consumer wired to headless events, queue changes and durable end.
 - [x] Full human queue regression and retry after capacity returns.
 - [x] CI-only fixture launch fix with actual click assertions.
-- [ ] Targeted verification and update the existing PR without merging.
+- [x] Targeted and full verification completed.
+- [ ] Push the verified candidate and update the existing PR without merging.
 
 ## Pre-commit verification
 
@@ -47,3 +48,30 @@ No user Desktop/real SSH/paid provider was used. Production browser options were
 not changed; the Linux CI flag applies only to the isolated controlled fixture.
 
 Post-commit merge-candidate results and final commit/base are reported on the PR.
+
+## Final integration verification
+
+Candidate before the mechanical test split: `10eab3f71243b0e9a4f1b46bd09cbf6b4690a764`.
+Personal main incorporated by ordinary merge:
+`6f7ba2b027509224e2956e0e8809222f6da918d7`.
+The owner-only SSH preview changes remain included; no published history was rewritten.
+
+- Full workspace JavaScript tests: `(umask 022; CI=true pnpm -r --if-present test)`
+  passed. Desktop: 4663 passed, 23 skipped; pi-host: 72 passed, 4 skipped.
+  All other workspace suites passed. The first run inherited local umask 0077
+  and failed the existing read-only storage fixture (0400 versus expected 0444).
+  The command-local 022 rerun passed without changing storage production code.
+- Full Rust suite: 1139 passed, 1 ignored. Formatting and Clippy passed;
+  three unchanged Clippy warnings remain.
+- Serialized JavaScript build, lint, Desktop typecheck and documentation checks
+  passed against the integrated candidate.
+- Headless collaboration, external filesystem, workspace messaging, legacy
+  collaboration and session completion E2E passed with the v28 Host binary.
+- Architecture validation required splitting collaboration-ceiling tests out of
+  the oversized external-access test module. This is a mechanical test-only
+  move with shared fixture helpers, not an architecture allowlist exemption.
+- Independent bounded feedback review found no open Critical/High/Medium/Low
+  defects. Native macOS, physical SSH and packaged acceptance remain unrun.
+
+The final pushed commit and remote CI status are recorded in the PR response.
+No merge is authorized or performed.

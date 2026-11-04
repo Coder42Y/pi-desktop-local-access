@@ -10991,4 +10991,6 @@ mod update_settings_tests {
 }
 
 #[cfg(test)]
+mod collaboration_ceiling_tests;
+#[cfg(test)]
 mod external_access_tests;
