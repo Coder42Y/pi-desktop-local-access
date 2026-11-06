@@ -1,5 +1,10 @@
 # 06. Desktop Release Runbook
 
+> Fork publishers: `Coder42Y/pi-desktop-local-access` follows the
+> [Fork Release Policy](06-fork-release-runbook.md): seven primary packages,
+> required runtime support files only, and engineering evidence kept in Actions.
+> The upstream all-formats matrix below is not the fork's public asset allowlist.
+
 > Scope: D126/D285/D603 tag artifacts for macOS arm64 and Intel x64, Windows x64,
 > and Linux x64 and arm64, including the Linux system-Electron ASAR assets;
 > macOS signing/notarization remains the detailed qualification lane below.
