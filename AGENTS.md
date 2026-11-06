@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Policy-Sync: 2026-09-26.1
+Policy-Sync: 2026-11-06.1
 
 Mandatory rules for AI coding agents working in PI-Desktop.
 
@@ -937,6 +937,17 @@ command.
 ---
 
 ## 18. Delivery Report
+
+### Fork releases
+
+Before publishing `Coder42Y/pi-desktop-local-access`, follow the
+[Fork Release Policy](docs/spec/06-delivery/06-fork-release-runbook.md).
+Default to seven primary packages (five Desktop installers plus two Linux
+pi-host bundles); publish only required runtime support files beyond them.
+Keep engineering evidence in Actions, never blindly upload `dist/*`, preserve
+checksum/update/authorization contracts, and never overwrite existing versions.
+
+### Task report
 
 At the end of a task, state briefly:
 
