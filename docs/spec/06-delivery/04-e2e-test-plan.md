@@ -19756,3 +19756,22 @@ their separate platform acceptance.
 - Coverage: Host Runtime turn-events/turn-persistence tests, Desktop collaboration
   service tests and Rust session_collaboration pending-page tests. The real
   headless composition E2E remains the representative successful user path.
+
+### E2E-SSH-fork-release-alignment
+
+- Preconditions: Explicitly authorized SSH target, native Linux release archive
+  and checksum built alongside Desktop from one fork commit; isolated remote HOME.
+- Steps: Run `PI_SSH_HOST=<host> PI_SSH_USER=<user> PI_SSH_BUNDLE=<archive>
+  node scripts/e2e-ssh-fork-release.mjs`; verify checksum, bootstrap, pair and
+  forward loopback RACP. Exercise external Read, denied ungranted/forged Write
+  and Bash, owner-granted Write/Edit/Bash, strict unknown-field rejection and reconnect.
+- Expected: URLs target Coder42Y/pi-desktop-local-access and preserve the full
+  `-local.N` version; Desktop metadata, APP_VERSION and pi-host agree. Official
+  0.21.0 and previous fork versions fail parity. No authorization flag is dropped,
+  no schema is relaxed, no existing Host credentials/state/process is modified.
+  Archive and Desktop provenance refer to the same SHA; no existing Release,
+  tag or asset is overwritten. Test artifacts/processes are cleaned up.
+- Automation: fork-ssh-release.test.mjs, fork-release-workflow.test.mjs,
+  RACP owner-only tool tests and the explicitly configured SSH script.
+- Compatibility: Daily SSH startup is not an updater. Existing official Hosts
+  require an explicit install/repair using the new matching fork Desktop.
