@@ -8,16 +8,25 @@ repository visibility changes, remote publishing or a release.
 
 | ID | Item | Status | Target version |
 |---|---|---|---|
-| NEXT-001 | Restore reliable update discovery and delivery for customized builds | Implementation candidate; native packaging/release pending | 0.21.0-local.2 candidate |
-| NEXT-002 | Reuse saved SSH connection configuration across conversations and application restarts | Backlog — requirements recorded; not started | To be scheduled |
-| NEXT-003 | Quote any selectable text in the composer with explicit model-facing quotation semantics | Backlog — requirements recorded; not started | To be scheduled |
-| NEXT-004 | Align and de-emphasize the SSH Upload indicator with explicit success/failure icons | Backlog — requirements recorded; not started | To be scheduled |
+| NEXT-001 | Restore reliable update discovery and delivery for customized builds | Published; installed macOS update flow still needs confirmation | v0.21.0-local.3 |
+| NEXT-002 | Reuse saved SSH connection configuration across conversations and application restarts | Merged for new SSH workspaces; native Desktop restart acceptance pending | Merged in PR #5 |
+| NEXT-003 | Quote selected text in the composer, starting with model replies | Backlog — requirements recorded | To be scheduled |
+| NEXT-004 | Align and de-emphasize the SSH Upload indicator with explicit success/failure icons | Merged; installed-plugin UI acceptance pending | Merged with the SSH Upload source |
+| NEXT-005 | Adopt upstream local file-link handling and retain fork SSH previews | Backlog — approach agreed | To be scheduled |
+| NEXT-006 | Adopt upstream background Bash controls under fork authorization | Backlog — approach agreed | To be scheduled |
+| NEXT-007 | Bring upstream Computer Use to the fork | Local candidate; pending fork integration | To be scheduled |
+| NEXT-008 | Bring upstream Composer model picker to the fork | Local candidate; pending fork integration | To be scheduled |
+| NEXT-009 | Bring upstream plugin launcher grid to the fork | Local candidate; pending fork integration | To be scheduled |
+| NEXT-010 | Bring upstream native Review panel to the fork | Local candidate; pending fork integration | To be scheduled |
 
 ## NEXT-001 — Customized-build update delivery
 
-> Current candidate and approved public-distribution decision:
-> [Custom update delivery](CUSTOM-UPDATE-DELIVERY.md). The observations and planning
-> notes below are the original intake snapshot, not current implementation status.
+> [v0.21.0-local.3](https://github.com/Coder42Y/pi-desktop-local-access/releases/tag/v0.21.0-local.3)
+> is published with validated update metadata. The remaining check is discovery
+> and manual update handoff from an installed macOS build. The ad-hoc macOS
+> distribution uses manual installation. See [release evidence](../Process/ssh-fork-release/design.md)
+> and [custom update delivery](CUSTOM-UPDATE-DELIVERY.md). The notes below are
+> the original intake snapshot.
 
 ### Observed problem
 
@@ -78,6 +87,12 @@ unapproved and unscheduled.
 
 ## NEXT-002 — SSH remote-session experience
 
+> Shared SSH Upload profiles are merged for new SSH workspaces. The
+> [acceptance record](../Process/ssh-upload-profile-reuse/acceptance.md)
+> covers persistence across cold plugin processes. Native Desktop restart
+> acceptance remains open. Legacy remote sessions retain their existing
+> per-context behavior.
+
 ### Product objective
 
 Improve the usability and interaction consistency of SSH remote sessions,
@@ -109,7 +124,6 @@ connection, a permanently live SSH session or a complete reconnection redesign.
 The specific connection entry, configuration ownership and remaining interaction
 details must be checked against the code before implementation. Claude App
 remains an experience benchmark, not a claim about its SSH capabilities.
-This is backlog documentation only; implementation has not started.
 
 ## NEXT-003 — Quote selected text into the composer
 
@@ -120,11 +134,13 @@ then send it to the model as clearly identified quoted content.
 
 ### Recorded requirements
 
-- Support text selected from model replies and from the user's own messages.
-  The scope is not limited to those message roles: any selectable text in the
-  application's accessible UI may be quoted.
-- Insert the selected text into the composer as a quote that is included when
-  the user sends the message.
+- Start with text selected from a model reply. Quoting from user messages and
+  other selectable in-app text remains a follow-up.
+- Add the selected passage as a separate quote in the current conversation's
+  composer. Preserve existing draft text and attachments. Removing the quote
+  leaves the rest of the draft intact.
+- Send the quoted passage together with the user's request when the user
+  explicitly sends. Adding or removing a quote never sends a message.
 - Present the quote as a text passage enclosed in quotation marks, with a
   subtle gray background. No elaborate card or broader visual redesign is
   requested.
@@ -137,8 +153,8 @@ then send it to the model as clearly identified quoted content.
 
 - Select text in a model reply, invoke Quote, and see that text appear as a
   quoted passage in the composer.
-- Repeat with a user message and other selectable text; quotation is not
-  restricted to model answers.
+- Start with an existing draft, add a quote, and remove it independently.
+  Verify that the original draft is intact and no message was sent.
 - Before sending, the quote is recognizable through quotation marks and a
   subtle gray background, retaining the selected text.
 - Send a message containing a quote and an accompanying request; the model's
@@ -149,12 +165,18 @@ then send it to the model as clearly identified quoted content.
 
 ### Planning boundary
 
-The selection action's placement and keyboard behavior, exact message encoding,
-multiline presentation and behavior across restart are not specified yet. Do
-not infer arbitrary system-wide selection access or additional OS permissions
-from this backlog item. No implementation or protocol/UI changes are started.
+Reuse the current transcript selection menu and the per-session composer draft
+and send paths. The [retired upstream quote](https://github.com/vastsa/PI-Desktop/pull/464)
+provides reference code for extracting selected text and formatting Markdown.
+It appended plain draft text, so the independently removable quote needs its
+own draft state. Keyboard behavior, encoding, and restart behavior remain
+to be specified.
 
 ## NEXT-004 — SSH Upload indicator presentation
+
+> The compact indicator is merged. The [UI acceptance record](../Process/ssh-upload-plugin-ui/acceptance-ui.md)
+> covers alignment, outcome icons, and accessible labels. Installed-plugin
+> acceptance remains open.
 
 ### Observed feedback
 
@@ -185,14 +207,55 @@ other conversation elements.
 
 ### Planning boundary
 
-This is a queued visual requirement only. It does not implement a redesign or
-change upload semantics. Treatment of the existing secondary detail line and
-in-progress/cancelled states remains to be decided during implementation.
+The shipped source change is limited to status presentation. Transfer behavior
+and the existing progress and cancellation controls retain their semantics.
+
+## NEXT-005 — Local file links and SSH previews
+
+- Adopt the upstream local resolver for explicit absolute file links,
+  including extensionless files, and route explicit directory links to the
+  file manager. Keep the fork's Finder reveal action. Read project-external
+  images only on explicit open, with no automatic inline load.
+- Keep the fork's owner-only SSH side-panel preview for remote text and images,
+  including explicit absolute paths outside the project. Preserve both SSH
+  session routes, remote Host identity, and the existing scope for relative
+  paths, directory listing, and search. A remote failure must not fall back to
+  the local filesystem.
+- Check the local and SSH paths separately with a compatible Desktop and
+  `pi-host` pair. The SSH preview is already implemented. This item covers
+  preserving it while integrating local behavior.
+
+Sources: [upstream absolute links](https://github.com/vastsa/PI-Desktop/pull/2097),
+[upstream directory links](https://github.com/vastsa/PI-Desktop/pull/2118),
+[fork SSH preview](../adr/ssh-external-file-preview.md).
+
+## NEXT-006 — Background Bash under fork authorization
+
+- Adopt upstream `TaskList`, `TaskWait`, and `TaskStop` for background Bash
+  in local Agent sessions. Resolve task IDs within the current session.
+- Route launch through the fork's existing conversation-and-Host filesystem
+  consent before the process starts, including in Auto mode. Keep the
+  initiating authorization ceiling for delegated work.
+- Track SSH background-job controls separately. The upstream job-management
+  path applies to local Agent sessions.
+
+Sources: [upstream background jobs](https://github.com/vastsa/PI-Desktop/pull/2115),
+[fork filesystem consent](../adr/external-filesystem-conversation-consent.md).
+
+## NEXT-007–010 — Upstream Desktop features
+
+The four features have a local candidate on `feat/upstream-desktop-features`.
+Track them independently. Fork `main` does not contain the candidate.
+
+| ID | Feature | Integration scope |
+|---|---|---|
+| NEXT-007 | [Computer Use](https://github.com/vastsa/PI-Desktop/pull/2103) | Keep opt-in settings, OS permissions, the visible run indicator, and Stop. Confirm the supported native platform. |
+| NEXT-008 | [Composer model picker](https://github.com/vastsa/PI-Desktop/pull/2134) | Bring search, provider filters, and the Models settings shortcut into the fork's existing settings layout. |
+| NEXT-009 | [Plugin launcher grid](https://github.com/vastsa/PI-Desktop/pull/2091) | Bring the grid, pins, and recent items for plugins and installed apps. Keep launcher-only authority for opening local apps. |
+| NEXT-010 | [Native Review panel](https://github.com/vastsa/PI-Desktop/pull/2017) | Bring round history, reviewed-file actions, and guarded rollback. Preserve fork filesystem consent and stored conversation data. |
 
 ## Scheduling
 
-NEXT-001 has an approved implementation candidate and public distribution source.
-Native macOS packaging, installed-build acceptance and publication remain pending;
-see the custom update runbook above. NEXT-002, NEXT-003 and NEXT-004 are queued with the
-requirements above recorded. Priority, implementation order and target versions
-remain to be scheduled; this documentation change does not authorize execution.
+The queue records the current status. Priority, implementation order, and
+target versions for the open feature work remain to be scheduled. Recording
+these items does not authorize implementation, integration, or a release.
