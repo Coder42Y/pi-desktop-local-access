@@ -41,7 +41,9 @@ try {
   const urls = piHostArtifactUrls(APP_VERSION, target);
   let artifactPath;
   if (process.env.PI_SSH_DOWNLOAD !== "1") {
-    artifactPath = `${home}/${name}`;
+    const uploadDir = `${home}/.pi-desktop/pi-host/.upload.acceptance`;
+    await exec(`umask 077; mkdir -p ${q(uploadDir)}`);
+    artifactPath = `${uploadDir}/artifact.tar.gz`;
     const upload = await transport.execWithFile(`umask 077; cat > ${q(artifactPath)}`, archive, { timeoutMs: 600000 });
     assert.equal(upload.code, 0, "verified candidate archive upload");
   }
