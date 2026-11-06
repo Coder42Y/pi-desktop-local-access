@@ -214,6 +214,10 @@ app.whenReady().then(async () => {
       await window.webContents.executeJavaScript("globalThis.composerPreviewPointerDone()");
     });
     await window.webContents.executeJavaScript('globalThis.composerPreviewPointer = input => new Promise(resolve => { globalThis.composerPreviewPointerDone = resolve; console.log("PI_PREVIEW_POINTER:" + JSON.stringify(input)); }); void 0');
+    const quoteResult = await window.webContents.executeJavaScript("globalThis.composerQuoteProbe()");
+    assert.equal(quoteResult.ok, true);
+    console.log("COMPOSER_QUOTE_PROBE " + JSON.stringify(quoteResult));
+    if (process.argv.includes("--quote-only")) { app.exit(0); return; }
     const result = await window.webContents.executeJavaScript("globalThis.composerPasteProbe()");
     await opensDone;
     assert.deepEqual(opened.map(path.extname), [".mp4", ".mp4", ".mp4"]);
@@ -274,31 +278,40 @@ app.whenReady().then(async () => {
     }
     return { code, output };
   };
-  const firstRun = await runElectron();
-  const pasteLine = firstRun.output
-    .split(/\r?\n/)
-    .find((line) => line.startsWith("COMPOSER_PASTE_PROBE "));
-  assert(
-    pasteLine,
-    `renderer returned no paste result (exit=${firstRun.code}): ${firstRun.output.slice(-3000)}`,
-  );
-  const pasteResult = JSON.parse(pasteLine.slice("COMPOSER_PASTE_PROBE ".length));
-  console.log("COMPOSER_PASTE_PROBE " + JSON.stringify(pasteResult));
-  assert.equal(firstRun.code, 0, firstRun.output.slice(-4000));
-  assert.equal(pasteResult.ok, true);
+  const quoteOnly = process.argv.includes("--quote-only");
+  const firstRun = await runElectron(quoteOnly ? ["--quote-only"] : []);
+  const quoteLine = firstRun.output.split(/\r?\n/).find((line) => line.startsWith("COMPOSER_QUOTE_PROBE "));
+  assert(quoteLine, firstRun.output.slice(-4000));
+  console.log(quoteLine);
+  if (quoteOnly) {
+    assert.equal(firstRun.code, 0, firstRun.output.slice(-4000));
+    process.exitCode = firstRun.code;
+  } else {
+    const pasteLine = firstRun.output
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("COMPOSER_PASTE_PROBE "));
+    assert(
+      pasteLine,
+      `renderer returned no paste result (exit=${firstRun.code}): ${firstRun.output.slice(-3000)}`,
+    );
+    const pasteResult = JSON.parse(pasteLine.slice("COMPOSER_PASTE_PROBE ".length));
+    console.log("COMPOSER_PASTE_PROBE " + JSON.stringify(pasteResult));
+    assert.equal(firstRun.code, 0, firstRun.output.slice(-4000));
+    assert.equal(pasteResult.ok, true);
 
-  const restartRun = await runElectron(["--history-check"]);
-  const restartLine = restartRun.output
-    .split(/\r?\n/)
-    .find((line) => line.startsWith("COMPOSER_HISTORY_RESTART "));
-  assert(
-    restartLine,
-    `renderer returned no restart result (exit=${restartRun.code}): ${restartRun.output.slice(-3000)}`,
-  );
-  const restartResult = JSON.parse(restartLine.slice("COMPOSER_HISTORY_RESTART ".length));
-  console.log("COMPOSER_HISTORY_RESTART " + JSON.stringify(restartResult));
-  assert.equal(restartRun.code, 0, restartRun.output.slice(-4000));
-  assert.equal(restartResult.ok, true);
+    const restartRun = await runElectron(["--history-check"]);
+    const restartLine = restartRun.output
+      .split(/\r?\n/)
+      .find((line) => line.startsWith("COMPOSER_HISTORY_RESTART "));
+    assert(
+      restartLine,
+      `renderer returned no restart result (exit=${restartRun.code}): ${restartRun.output.slice(-3000)}`,
+    );
+    const restartResult = JSON.parse(restartLine.slice("COMPOSER_HISTORY_RESTART ".length));
+    console.log("COMPOSER_HISTORY_RESTART " + JSON.stringify(restartResult));
+    assert.equal(restartRun.code, 0, restartRun.output.slice(-4000));
+    assert.equal(restartResult.ok, true);
+  }
 } finally {
   await rm(temp, { recursive: true, force: true });
 }

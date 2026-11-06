@@ -329,3 +329,15 @@ test("the composer wires recall, its exits, and the record point (AC3)", async (
   assert.match(composer, /onSubmit=\{\(steering\) => void submitFromComposer\(steering\)\}/);
   assert.match(composer, /submit=\{submitFromComposer\}/);
 });
+
+
+test("history keeps quotes distinct even when the user question is identical", () => {
+  installStorage();
+  rememberComposerInput("a", { ...snap("Why?"), quotes: ["first"] });
+  rememberComposerInput("a", { ...snap("Why?"), quotes: ["second"] });
+  rememberComposerInput("a", { ...snap(""), quotes: ["only a quote"] });
+  assert.deepEqual(loadComposerInputHistory("a").map((entry) => entry.quotes), [
+    ["only a quote"], ["second"], ["first"],
+  ]);
+  assert.deepEqual(loadComposerInputHistory("b"), []);
+});

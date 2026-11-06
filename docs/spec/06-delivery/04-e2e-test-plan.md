@@ -19775,3 +19775,17 @@ their separate platform acceptance.
   RACP owner-only tool tests and the explicitly configured SSH script.
 - Compatibility: Daily SSH startup is not an updater. Existing official Hosts
   require an explicit install/repair using the new matching fork Desktop.
+
+### E2E-CHAT-composer-reply-excerpt
+
+- Start with an existing question in the composer. Select part of a model
+  reply, including linked text, and choose **Quote in composer**. Verify the
+  passage appears separately and the question is unchanged. An empty selection
+  offers no quote action and keeps the normal link menu.
+- Switch conversations and return. Remove the quote, verify the question is
+  intact, and add the quote again. Adding and removing it do not submit.
+- Submit, simulate a rejected send, and verify the separate quote and question
+  restore. Submit successfully and verify a Markdown blockquote and question
+  reach the prompt boundary in one message and the draft clears.
+- Run `node scripts/e2e-composer-paste.mjs --quote-only` in an isolated Electron
+  environment. The full composer paste suite also executes this path.

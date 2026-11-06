@@ -135,6 +135,7 @@ export function assistantTurnMenuItems({
   selectTarget,
   complete,
   actions,
+  onQuote,
   onRegenerate,
   onBranch,
 }: {
@@ -144,6 +145,7 @@ export function assistantTurnMenuItems({
   /** Idle, error-free, and backed by an answer message. */
   complete: boolean;
   actions: MenuItemActions;
+  onQuote?: () => void;
   onRegenerate: () => void;
   onBranch: () => void;
 }): ContextMenuItem[] {
@@ -160,6 +162,14 @@ export function assistantTurnMenuItems({
       label: t("chat.selectMessageText"),
       icon: selectIcon(),
       onSelect: () => actions.selectText(selectTarget),
+    });
+  }
+  if (onQuote) {
+    items.push({
+      id: "quote-selection",
+      label: t("chat.quoteInComposer"),
+      icon: selectIcon(),
+      onSelect: onQuote,
     });
   }
   if (complete) {

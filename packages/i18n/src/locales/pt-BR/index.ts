@@ -413,6 +413,8 @@ export const ptBR = {
     messageMenu: "Ações da mensagem",
     conversationMenu: "Ações da conversa",
     selectMessageText: "Selecionar texto da mensagem",
+    quoteInComposer: "Citar no campo de mensagem",
+    removeComposerQuote: "Remover citação",
     copyConversation: "Copiar conversa",
     copyLastAnswer: "Copiar última resposta",
     radialMenuOpenBrowser: "Abrir navegador",

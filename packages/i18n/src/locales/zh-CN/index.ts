@@ -419,6 +419,8 @@ export const zhCN = {
     actionSlotMore: "更多操作",
     conversationMenu: "对话操作",
     selectMessageText: "选中消息文本",
+    quoteInComposer: "引用到输入框",
+    removeComposerQuote: "移除引用",
     copyConversation: "复制整个对话",
     copyLastAnswer: "复制最后一条回复",
     radialMenuOpenBrowser: "打开浏览器",

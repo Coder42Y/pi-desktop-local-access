@@ -10,7 +10,7 @@ repository visibility changes, remote publishing or a release.
 |---|---|---|---|
 | NEXT-001 | Restore reliable update discovery and delivery for customized builds | Published; installed macOS update flow still needs confirmation | v0.21.0-local.3 |
 | NEXT-002 | Reuse saved SSH connection configuration across conversations and application restarts | Merged for new SSH workspaces; native Desktop restart acceptance pending | Merged in PR #5 |
-| NEXT-003 | Quote selected text in the composer, starting with model replies | Backlog — requirements recorded | To be scheduled |
+| NEXT-003 | Quote selected text in the composer, starting with model replies | Implemented in the task candidate | To be scheduled |
 | NEXT-004 | Align and de-emphasize the SSH Upload indicator with explicit success/failure icons | Merged; installed-plugin UI acceptance pending | Merged with the SSH Upload source |
 | NEXT-005 | Adopt upstream local file-link handling and retain fork SSH previews | Backlog — approach agreed | To be scheduled |
 | NEXT-006 | Adopt upstream background Bash controls under fork authorization | Backlog — approach agreed | To be scheduled |
@@ -169,8 +169,8 @@ Reuse the current transcript selection menu and the per-session composer draft
 and send paths. The [retired upstream quote](https://github.com/vastsa/PI-Desktop/pull/464)
 provides reference code for extracting selected text and formatting Markdown.
 It appended plain draft text, so the independently removable quote needs its
-own draft state. Keyboard behavior, encoding, and restart behavior remain
-to be specified.
+own draft state. See the [Composer spec](../spec/04-ux/08-component-spec.md#quote-selected-model-text-fork-next-003)
+for the implemented draft and submission behavior.
 
 ## NEXT-004 — SSH Upload indicator presentation
 

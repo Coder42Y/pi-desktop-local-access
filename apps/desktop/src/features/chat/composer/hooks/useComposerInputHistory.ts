@@ -1,3 +1,4 @@
+import { readComposerQuotes, setComposerQuotes } from "../../../../lib/composer-draft-cache";
 import { useEffect, useRef } from "react";
 import type { ComposerDraftSnapshot } from "../../../../lib/composer-smart-stop";
 import {
@@ -69,6 +70,7 @@ export function useComposerInputHistory({
       direction,
       draftEmpty:
         !draft.readLiveDraft().trim() &&
+        !readComposerQuotes(draftKey).length &&
         !draft.fileReferencesRef.current.some(
           (reference) => reference.sessionId === referenceSessionId,
         ),
@@ -77,8 +79,10 @@ export function useComposerInputHistory({
       createReference: (reference) =>
         createFileReference(reference.path, reference.name, referenceSessionId, reference),
       effects: {
-        applyDraft: (text, references, caret) =>
-          draft.applyEditorDraft(text, [...references], caret),
+        applyDraft: (text, references, caret, quotes) => {
+          setComposerQuotes(draftKey, quotes);
+          draft.applyEditorDraft(text, [...references], caret);
+        },
       },
     });
     entriesRef.current = result.entries;

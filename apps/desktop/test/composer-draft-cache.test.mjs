@@ -17,10 +17,13 @@ import {
   pruneComposerDrafts,
   readComposerDraft,
   readComposerDraftRevision,
+  readComposerQuotes,
+  setComposerQuotes,
   resetComposerDraftCache,
   scheduleHomeDraftAdopt,
   snapshotComposerDraft,
   writeComposerDraft,
+  writeComposerDraftContent,
 } from "../src/lib/composer-draft-cache.ts";
 
 const composer = await readComposerSource();
@@ -180,4 +183,25 @@ test("composer handles home drafts, deleted sessions, and async sends by key", (
   assert.match(composer, /clearDraftForKey\(submittedDraftKey, submittedDraftRevision, submittedDraft\)/);
   assert.match(composer, /readComposerDraftRevision\(key\) !== expectedRevision/);
   assert.doesNotMatch(composer, /if \(accepted\) clearDraft\(\);/);
+});
+
+
+test("quote edits preserve text and files while capture keeps the session's quotes", () => {
+  const file = { sessionId: "a", path: "notes.txt", name: "notes.txt" };
+  const original = captureComposerDraft("a", "Existing question", [file]);
+  const revision = readComposerDraftRevision("a");
+  setComposerQuotes("a", ["first excerpt", "second excerpt"]);
+  assert.ok(readComposerDraftRevision("a") > revision);
+  assert.deepEqual(readComposerDraft("a"), { ...original, quotes: ["first excerpt", "second excerpt"] });
+  assert.deepEqual(readComposerQuotes("b"), []);
+  captureComposerDraft("a", "Revised question", [file]);
+  assert.deepEqual(readComposerQuotes("a"), ["first excerpt", "second excerpt"]);
+  writeComposerDraftContent("a", { text: "Revised question", fileReferences: original.fileReferences });
+  assert.deepEqual(readComposerQuotes("a"), ["first excerpt", "second excerpt"]);
+  setComposerQuotes("a", ["second excerpt"]);
+  assert.deepEqual(readComposerQuotes("a"), ["second excerpt"]);
+  assert.equal(readComposerDraft("a").text, "Revised question");
+  assert.deepEqual(readComposerDraft("a").fileReferences, original.fileReferences);
+  deleteComposerDraft("a");
+  assert.deepEqual(readComposerQuotes("a"), []);
 });
