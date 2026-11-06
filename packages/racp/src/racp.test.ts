@@ -469,6 +469,29 @@ describe("owner-only workspace tool boundary", () => {
     expect(calls).toHaveLength(3);
     await viewer.client.close();
   });
+  it("preserves owner authorization flags through strict validation without admitting unknown fields", async () => {
+    const calls: unknown[] = [];
+    const h = await harness({ operations: { workspaceTools: {
+      async execute(input) { calls.push(input); return { ok: true, content: "fixture" }; },
+      async abort() {}, async disconnect() {},
+      async shell() { throw new Error("unused"); },
+    } } });
+    const { client } = await h.connect(OWNER_TOKEN);
+    const viewer = await h.connect(VIEWER_TOKEN);
+    const input = { path: "/workspace", sessionId: "local", turnId: "turn", toolCallId: "grant", toolName: "Write", args: { path: "/external", content: "fixture" } };
+    try {
+      for (const flag of [undefined, false, true]) {
+        const request = { ...input, ...(flag === undefined ? {} : { allowExternalWrites: flag }) };
+        await expect(client.request("workspace/toolExecute", request)).resolves.toMatchObject({ ok: true });
+        expect(calls.at(-1)).toEqual(request);
+      }
+      for (const extra of [{ allowExternalWrites: "true" }, { allowExternalWrites: true, unknownGrant: true }]) {
+        await expect(client.request("workspace/toolExecute", { ...input, ...extra })).rejects.toMatchObject({ code: "INVALID_ARGUMENT" });
+      }
+      await expect(viewer.client.request("workspace/toolExecute", { ...input, allowExternalWrites: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      expect(calls).toHaveLength(3);
+    } finally { await client.close(); await viewer.client.close(); }
+  });
   it("fails closed when the paired Host lacks the tool service", async () => {
     const h = await harness(); const { client } = await h.connect(OWNER_TOKEN);
     await expect(client.request("workspace/toolShell", {})).rejects.toMatchObject({ code: "CAPABILITY_UNAVAILABLE" });

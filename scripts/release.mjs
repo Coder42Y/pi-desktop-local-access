@@ -53,8 +53,10 @@ function bumpPackageJson(relPath) {
   const file = path.join(root, relPath);
   if (!existsSync(file)) return;
   const pkg = JSON.parse(readFileSync(file, "utf8"));
-  if (pkg.version === version) return;
+  const metadata = pkg.build?.extraMetadata;
+  if (pkg.version === version && (!metadata?.version || metadata.version === version)) return;
   pkg.version = version;
+  if (metadata?.version) metadata.version = version;
   writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
   changed.push(relPath);
 }
