@@ -80,8 +80,13 @@ for (const name of [`PI-Desktop-Setup-${version}.exe`, `PI-Desktop-Setup-${versi
 }
 for (const arch of ['arm64', 'x64']) {
   const directory = await validateArtifact('fork-desktop-linux-' + arch);
-  await stageFile(directory, `PI-Desktop-${version}-linux-${arch === 'x64' ? 'x86_64' : arch}.AppImage`);
-  await stageFile(directory, arch === 'x64' ? 'local-linux.yml' : 'local-linux-arm64.yml');
+  const appImage = `PI-Desktop-${version}-linux-${arch === 'x64' ? 'x86_64' : arch}.AppImage`;
+  await stageFile(directory, appImage);
+  const feedName = arch === 'x64' ? 'local-linux.yml' : 'local-linux-arm64.yml';
+  const feed = yaml.load(await readFile(join(directory, feedName), 'utf8'));
+  const files = feed.files.filter(file => file.url === appImage);
+  assert.equal(files.length, 1, feedName + ': expected one AppImage update payload');
+  await writeFile(join(stage, feedName), yaml.dump({ ...feed, files, path: appImage, sha512: files[0].sha512 }));
   const host = await validateArtifact('fork-pi-host-linux-' + arch);
   const archive = `pi-host-${version}-linux-${arch}.tar.gz`;
   await stageFile(host, archive);
