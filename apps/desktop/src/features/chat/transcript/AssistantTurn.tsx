@@ -43,6 +43,8 @@ import { MessageRow } from "./MessageRow";
 import { ReviewChangeCard } from "../../../components/ReviewChangeCard";
 import { ToolRow } from "./ToolRow";
 import { assistantTurnMenuItems } from "./menu-items";
+import { selectedReplyExcerpt } from "./quote-selection";
+import { readComposerQuotes, setComposerQuotes } from "../../../lib/composer-draft-cache";
 import {
   useChatTextActions,
   useTranscriptMenu,
@@ -309,7 +311,15 @@ export const AssistantTurn = memo(function AssistantTurn({
     included: Regenerate and Branch act on the turn's answer message, so a menu
     owned by a single message part could not offer them honestly.
   */
-  const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+  const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>, excerpt = "") => {
+    const quote = () => {
+      const current = useAppStore.getState();
+      if (current.activeSessionId !== paneSessionId) return;
+      const owner = current.sessions.find((item) => item.id === paneSessionId);
+      if (!sessionAllows(owner ?? (paneSessionId.startsWith("remote:") ? { id: paneSessionId } : undefined), "canPrompt")) return;
+      const quotes = readComposerQuotes(paneSessionId);
+      if (!quotes.includes(excerpt)) setComposerQuotes(paneSessionId, [...quotes, excerpt]);
+    };
     openTranscriptMenu(event, {
       label: t("chat.messageMenu"),
       items: assistantTurnMenuItems({
@@ -323,6 +333,7 @@ export const AssistantTurn = memo(function AssistantTurn({
           ].at(-1) ?? null,
         complete: complete && Boolean(actionMessage) && canEditMessages,
         actions: { copyText, selectText },
+        onQuote: excerpt ? quote : undefined,
         onRegenerate: () => {
           if (actionMessage) void retryAssistantMessage(actionMessage.id);
         },
@@ -331,6 +342,14 @@ export const AssistantTurn = memo(function AssistantTurn({
         },
       }),
     });
+  };
+
+  const onSelectedTextContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (!paneSessionId || useAppStore.getState().activeSessionId !== paneSessionId) return;
+    const target = session ?? (paneSessionId.startsWith("remote:") ? { id: paneSessionId } : undefined);
+    if (!sessionAllows(target, "canPrompt")) return;
+    const excerpt = selectedReplyExcerpt(event.currentTarget, event.target);
+    if (excerpt) onContextMenu(event, excerpt);
   };
 
   // Collect delegation statuses across ALL activity parts of this turn so that
@@ -397,6 +416,7 @@ export const AssistantTurn = memo(function AssistantTurn({
       className={`message-row assistant assistant-turn${streaming ? " streaming" : ""}`}
       data-minimap-id={entry.anchorId}
       data-row-role="assistant"
+      onContextMenuCapture={onSelectedTextContextMenu}
       onContextMenu={onContextMenu}
       role="article"
       aria-label={t("chat.assistantMessage")}

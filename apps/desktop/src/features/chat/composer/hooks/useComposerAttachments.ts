@@ -12,7 +12,7 @@ import {
   HOME_DRAFT_KEY,
   deleteComposerDraft,
   draftFileReference,
-  writeComposerDraft,
+  writeComposerDraftContent,
 } from "../../../../lib/composer-draft-cache";
 import {
   composerDropItems,
@@ -139,7 +139,7 @@ export function useComposerAttachments({
         ),
         ...chips.map((chip) => chip.reference),
       ];
-      writeComposerDraft(sessionId, {
+      writeComposerDraftContent(sessionId, {
         text: nextText,
         fileReferences: [
           ...previousReferences,
@@ -201,7 +201,7 @@ export function useComposerAttachments({
       ),
       ...sessionReferences,
     ];
-    writeComposerDraft(ownerSessionId || draftKey, {
+    writeComposerDraftContent(ownerSessionId || draftKey, {
       text: nextText,
       fileReferences: [
         ...previousReferences,
@@ -291,7 +291,7 @@ export function useComposerAttachments({
           ),
           ...chips.map((chip) => chip.reference),
         ];
-        writeComposerDraft(sessionId, {
+        writeComposerDraftContent(sessionId, {
           text: nextText,
           fileReferences: [
             ...previousReferences,
@@ -413,7 +413,7 @@ export function useComposerAttachments({
         ...chips.map((chip) => chip.reference),
       ];
       const targetKey = sessionId || sourceDraftKey;
-      writeComposerDraft(targetKey, {
+      writeComposerDraftContent(targetKey, {
         text: nextText,
         fileReferences: [
           ...previousReferences,

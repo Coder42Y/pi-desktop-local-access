@@ -147,7 +147,7 @@ export function createQueueSlice({
       if (isRemoteSession(get().sessions.find((session) => session.id === sessionId)) || sessionId.startsWith("remote:")) return false;
       const queuedDraft: ComposerDraftSnapshot = draft
         ? {
-            text: draft.text,
+            ...draft,
             fileReferences: draft.fileReferences.map((reference) => ({
               ...reference,
             })),
@@ -236,7 +236,7 @@ export function createQueueSlice({
       // and the inline file references the user actually wrote.
       const restored: ComposerPrefill = {
         sessionId,
-        text: item.draft.text,
+        ...item.draft,
         fileReferences: item.draft.fileReferences.map((reference) => ({
           ...reference,
         })),
@@ -406,7 +406,7 @@ export function createQueueSlice({
           messageCountBeforeSend,
           draft: draft
             ? {
-                text: draft.text,
+                ...draft,
                 fileReferences: draft.fileReferences.map((reference) => ({
                   ...reference,
                 })),

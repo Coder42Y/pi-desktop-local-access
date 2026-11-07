@@ -426,6 +426,8 @@ export const tr = {
     messageMenu: "Mesaj işlemleri",
     conversationMenu: "Konuşma işlemleri",
     selectMessageText: "Mesaj metnini seç",
+    quoteInComposer: "Yazma alanında alıntıla",
+    removeComposerQuote: "Alıntıyı kaldır",
     copyConversation: "Konuşmayı kopyala",
     copyLastAnswer: "Son yanıtı kopyala",
     radialMenuOpenBrowser: "Tarayıcıyı aç",

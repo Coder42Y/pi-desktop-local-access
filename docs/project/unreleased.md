@@ -6,6 +6,10 @@
   project now require an explicit open. Finder reveal and SSH previews remain
   available for their existing file routes.
 
+- Quote selected text from a model reply in the composer. Remove each quote
+  independently and send it with your question when ready.
+
+
 - Preserve the initiating conversation's filesystem authorization throughout
   native deliveries, including queued/forwarded work and completion callbacks.
   Headless Hosts now execute and settle native messaging through the shared

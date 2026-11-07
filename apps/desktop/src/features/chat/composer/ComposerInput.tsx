@@ -1,3 +1,6 @@
+import { useTranslation } from "react-i18next";
+import { IconX } from "../../../components/icons";
+import { TooltipButton } from "../../../components/ui";
 import { useLayoutEffect } from "react";
 import { installComposerDeletionGuard } from "./native-deletion";
 import type {
@@ -18,6 +21,10 @@ import type { ComposerImagePreviewController } from "./hooks/useComposerImagePre
 
 export type ComposerInputProps = {
   imagePreview?: ComposerImagePreviewController;
+  quoteDraft?: {
+    quotes: readonly string[];
+    removeQuote: (quote: string) => void;
+  };
   inputRef: RefObject<HTMLDivElement | null>;
   value: string;
   placeholderText: string;
@@ -56,6 +63,7 @@ export type ComposerInputProps = {
 /** Rich contenteditable input; draft state and async operations stay outside. */
 export function ComposerInput({
   imagePreview,
+  quoteDraft,
   inputRef,
   value,
   placeholderText,
@@ -78,6 +86,7 @@ export function ComposerInput({
   onFocus,
   onBlur,
 }: ComposerInputProps) {
+  const { t } = useTranslation();
   useLayoutEffect(() => {
     const editor = inputRef.current;
     return editor ? installComposerDeletionGuard(editor) : undefined;
@@ -86,6 +95,23 @@ export function ComposerInput({
     <div className="composer-input-wrap">
       {imagePreview ? <ComposerImagePreview controller={imagePreview} /> : null}
       {imagePreview ? <ComposerImageHover controller={imagePreview} editorRef={inputRef} /> : null}
+      {quoteDraft?.quotes.length ? (
+        <ul className="composer-quotes">
+          {quoteDraft.quotes.map((quote) => (
+            <li key={quote} className="composer-quote">
+              <q>{quote}</q>
+              <TooltipButton
+                type="button"
+                tooltip={t("chat.removeComposerQuote")}
+                ariaLabel={t("chat.removeComposerQuote")}
+                onClick={() => quoteDraft.removeQuote(quote)}
+              >
+                <IconX size={14} />
+              </TooltipButton>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="composer-input-stage">
         {/* React does not render children into this node; the editor module
           paints atomic attachment chips imperatively. */}

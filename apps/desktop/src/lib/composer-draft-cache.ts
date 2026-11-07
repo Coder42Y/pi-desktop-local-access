@@ -80,6 +80,37 @@ export function sameDraftFileReference(
 const cache = new Map<string, CachedComposerDraft>();
 const revisions = new Map<string, number>();
 let revisionCounter = 0;
+const emptyQuotes: readonly string[] = [];
+const quoteListeners = new Set<() => void>();
+
+export function readComposerQuotes(key: string): readonly string[] {
+  return cache.get(key)?.quotes ?? emptyQuotes;
+}
+
+export function subscribeComposerQuotes(listener: () => void): () => void {
+  quoteListeners.add(listener);
+  return () => { quoteListeners.delete(listener); };
+}
+
+function updateCache(key: string, draft?: CachedComposerDraft): void {
+  const previousQuotes = readComposerQuotes(key);
+  if (draft) cache.set(key, draft);
+  else cache.delete(key);
+  if (readComposerQuotes(key) !== previousQuotes) {
+    for (const listener of quoteListeners) listener();
+  }
+}
+
+export function setComposerQuotes(key: string, quotes: readonly string[] = emptyQuotes): void {
+  if (sameComposerQuotes(readComposerQuotes(key), quotes)) return;
+  const current = cache.get(key) ?? { text: "", fileReferences: [] };
+  markComposerDraftEdited(key);
+  updateCache(key, { ...current, quotes: quotes.length ? quotes : undefined });
+}
+
+export function sameComposerQuotes(left = emptyQuotes, right = emptyQuotes): boolean {
+  return left.length === right.length && left.every((quote, index) => quote === right[index]);
+}
 
 export function draftKeyForSession(sessionId: string | null | undefined): string {
   return sessionId ?? HOME_DRAFT_KEY;
@@ -143,7 +174,16 @@ export function writeComposerDraft(
   } else if (existing?.workspacePath !== undefined && next.workspacePath === undefined) {
     next.workspacePath = existing.workspacePath;
   }
-  cache.set(key, next);
+  updateCache(key, next);
+}
+
+/** Update the editor and attachments without replacing the quote list. */
+export function writeComposerDraftContent(
+  key: string,
+  content: Pick<ComposerDraftSnapshot, "text" | "fileReferences">,
+): void {
+  const quotes = readComposerQuotes(key);
+  writeComposerDraft(key, quotes.length ? { ...content, quotes } : content);
 }
 
 export function captureComposerDraft(
@@ -153,12 +193,14 @@ export function captureComposerDraft(
   workspacePath?: string,
 ): CachedComposerDraft {
   const snapshot = snapshotComposerDraft(text, fileReferences, key, workspacePath);
-  cache.set(key, snapshot);
+  const quotes = readComposerQuotes(key);
+  if (quotes.length) snapshot.quotes = quotes;
+  updateCache(key, snapshot);
   return snapshot;
 }
 
 export function deleteComposerDraft(key: string): void {
-  cache.delete(key);
+  updateCache(key);
 }
 
 /**
@@ -182,9 +224,9 @@ let scheduledHomeAdoptSessionId: string | null = null;
 export function adoptHomeDraftForSession(sessionId: string): void {
   if (!sessionId) return;
   const home = cache.get(HOME_DRAFT_KEY);
-  cache.delete(HOME_DRAFT_KEY);
+  updateCache(HOME_DRAFT_KEY);
   if (!home) return;
-  if (!home.text && home.fileReferences.length === 0) return;
+  if (!home.text && !home.fileReferences.length && !home.quotes?.length) return;
   writeComposerDraft(sessionId, home);
 }
 
@@ -203,7 +245,7 @@ export function flushScheduledHomeDraftAdopt(sessionId: string): void {
 export function pruneComposerDrafts(keep: Iterable<string>): void {
   const retain = new Set(keep);
   for (const key of cache.keys()) {
-    if (!retain.has(key)) cache.delete(key);
+    if (!retain.has(key)) updateCache(key);
   }
   for (const key of revisions.keys()) {
     if (!retain.has(key)) revisions.delete(key);
@@ -212,7 +254,7 @@ export function pruneComposerDrafts(keep: Iterable<string>): void {
 
 /** Test-only: drop every slot so cases cannot leak into one another. */
 export function resetComposerDraftCache(): void {
-  cache.clear();
+  for (const key of cache.keys()) updateCache(key);
   revisions.clear();
   scheduledHomeAdoptSessionId = null;
 }

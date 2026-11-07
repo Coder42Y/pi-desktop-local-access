@@ -41,6 +41,14 @@ describe("session links", () => {
     expect(parseSessionLinks("pi-desktop://session/")).toEqual([]);
   });
 
+  it("leaves links in quoted passages literal while preserving request offsets", () => {
+    const link = formatSessionLink("requested");
+    const text = `> Example ${formatSessionLink("quoted")}\r\n\r\nSee ${link}`;
+    const start = text.lastIndexOf(link);
+    expect(parseSessionLinks(text)).toEqual(["requested"]);
+    expect(sessionLinkSpans(text)).toEqual([{ id: "requested", start, end: start + link.length }]);
+  });
+
   it("recognizes one token without scanning prose", () => {
     expect(isSessionLinkToken(formatSessionLink("abc"))).toBe(true);
     expect(isSessionLinkToken("@src/index.ts")).toBe(false);

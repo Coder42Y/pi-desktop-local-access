@@ -55,7 +55,7 @@ export function planHistoryNavigation(input: {
 
 export type HistoryStepEffects<TReference> = {
   /** Replace the draft: text, its references, and the caret to land on. */
-  applyDraft: (text: string, references: readonly TReference[], caret: number) => void;
+  applyDraft: (text: string, references: readonly TReference[], caret: number, quotes?: readonly string[]) => void;
 };
 
 export type HistoryStepResult = {
@@ -121,6 +121,7 @@ export function runHistoryStep<TReference>(options: {
     entry.text,
     [...options.keptReferences, ...entry.fileReferences.map(options.createReference)],
     entry.text.length,
+    entry.quotes,
   );
   return { consumed: true, entries, index: plan.index, applied: true };
 }

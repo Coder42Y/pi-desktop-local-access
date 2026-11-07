@@ -426,6 +426,8 @@ export const en = {
     messageMenu: "Message actions",
     conversationMenu: "Conversation actions",
     selectMessageText: "Select message text",
+    quoteInComposer: "Quote in composer",
+    removeComposerQuote: "Remove quote",
     copyConversation: "Copy conversation",
     copyLastAnswer: "Copy last answer",
     radialMenuOpenBrowser: "Open browser",

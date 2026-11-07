@@ -1,3 +1,6 @@
+import { AssistantTurn } from "../../apps/desktop/src/features/chat/transcript/AssistantTurn";
+import { TranscriptMenuProvider } from "../../apps/desktop/src/features/chat/transcript/TranscriptMenu";
+import { SlotSessionProvider } from "../../apps/desktop/src/plugins/renderer-slots/use-slots";
 import { formatSessionLink, serializeInlineComposerFileReferences, type MessageAttachment } from "@pi-desktop/shared";
 import { useComposerInputHistory } from "../../apps/desktop/src/features/chat/composer/hooks/useComposerInputHistory";
 import type { AppState } from "../../apps/desktop/src/stores/app-state";
@@ -41,13 +44,14 @@ declare global {
   var composerPreviewPointer: (input: { type: "mousePressed" | "mouseMoved" | "mouseReleased"; x: number; y: number }) => Promise<void>;
   var composerPreviewPressKey: (key: string) => Promise<void>;
   var composerPreviewCapture: (() => Promise<void>) | undefined;
+  var composerQuoteProbe: () => Promise<{ ok: boolean }>;
   var composerPasteProbe: () => Promise<unknown>;
   var composerHistoryProbe: (phase: "prepare" | "verify") => Promise<unknown>;
 }
 const assert = (value: unknown, message: string) => {
   if (!value) throw new Error(message);
 };
-const sessions = [{ id: "paste-a" }, { id: "paste-b" }, { id: "history-created-session" }];
+const sessions = [{ id: "paste-a" }, { id: "paste-b" }, { id: "history-created-session" }, { id: "quote-a" }, { id: "quote-b" }];
 const noop = () => {};
 let controller: ComposerDraftController;
 let pastePending: Promise<unknown> | undefined;
@@ -75,7 +79,8 @@ function Fixture({ sessionId, t, workspacePath }: { sessionId: string; t: TFunct
   });
   const submitController = useComposerSubmit({
     value: draft.value, draftKey: draft.draftKey, activeSessionId: sessionId || null,
-    thinkingLevel: "off", modelReady: true, sendBlocked: false, pasting: false,
+    modelReady: true, sendBlocked: false, pasting: false,
+    invalidateComposerTransforms: noop, queuedPrompts: [], sendQueuedNow: async () => {},
     activeFileReferences: draft.activeFileReferences, t, draft,
     recordHistory: inputHistory.record,
     sendPrompt: (...args) => historySendPrompt(...args),
@@ -100,6 +105,7 @@ function Fixture({ sessionId, t, workspacePath }: { sessionId: string; t: TFunct
       <div className="composer-shell">
       <ComposerInput
         imagePreview={draft.imagePreview}
+        quoteDraft={draft}
         inputRef={draft.ref}
         value={draft.value}
         placeholderText=""
@@ -150,6 +156,118 @@ function Mp4AttachmentChips({ scratchPath }: { scratchPath: string }) {
     </div>
   );
 }
+
+globalThis.composerQuoteProbe = async () => {
+  const i18n = createInstance();
+  await i18n.init({ lng: "en", resources: { en: { translation: en } } });
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const question = "What does that include?";
+  const excerpt = "by session and host";
+  const selectedAnswer = `Scope access [${excerpt}](https://example.test/) before running tools.`;
+  const entry = {
+    kind: "assistant-turn",
+    id: "quoted-turn",
+    parts: [{
+      kind: "message",
+      message: { id: "quoted-answer", role: "assistant", content: selectedAnswer, createdAt: "2026-11-06T00:00:00Z" },
+    }],
+  } as const;
+  const render = (sessionId: string) => {
+    useAppStore.setState({ activeSessionId: sessionId });
+    flushSync(() => root.render(
+      <I18nextProvider i18n={i18n}>
+        <TranscriptMenuProvider>
+          <SlotSessionProvider sessionId={sessionId}>
+            <AssistantTurn entry={{ ...entry, parts: [...entry.parts] }} isActive={false} />
+            <Fixture sessionId={sessionId} t={i18n.t} workspacePath="" />
+          </SlotSessionProvider>
+        </TranscriptMenuProvider>
+      </I18nextProvider>,
+    ));
+  };
+  const openQuoteMenu = (select: boolean) => {
+    const prose = host.querySelector(".assistant-turn-fragment > .prose-chat");
+    const link = prose?.querySelector("a");
+    const text = link?.firstChild;
+    if (!link || !text) throw new Error("Model reply missing");
+    const selection = document.getSelection()!;
+    selection.removeAllRanges();
+    if (select) {
+      const range = document.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, excerpt.length);
+      selection.addRange(range);
+    }
+    flushSync(() => link.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })));
+    return Array.from(document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+      .find((item) => item.textContent?.trim() === "Quote in composer");
+  };
+
+  const submissions: string[] = [];
+  let accept = false;
+  const previousSend = historySendPrompt;
+  const previousSubmissionCount = submitted;
+  historySendPrompt = async (content) => {
+    submissions.push(content);
+    return accept;
+  };
+  try {
+    render("quote-a");
+    flushSync(() => controller.applyEditorDraft(question, [], question.length));
+    assert(!openQuoteMenu(false), "Quote is hidden without a selection");
+    assert(Array.from(document.querySelectorAll('[role="menuitem"]'))
+      .some((item) => item.textContent?.trim() === "Copy link address"), "An unselected link keeps its link menu");
+    const addQuote = () => {
+      const item = openQuoteMenu(true);
+      if (!item) throw new Error("Quote action missing for model selection");
+      flushSync(() => item.click());
+    };
+    addQuote();
+    assert(host.querySelector("q")?.textContent === excerpt, "Only the selection appears as a quote");
+    assert(readEditorValue(controller.ref.current!) === question, "Adding a quote preserves the existing draft");
+    assert(submissions.length === 0, "Adding a quote never sends");
+    render("quote-b");
+    assert(!host.querySelector("q"), "Another conversation has no quote");
+    render("quote-a");
+    assert(host.querySelector("q")?.textContent === excerpt, "Switching back restores the quote");
+    const remove = host.querySelector<HTMLButtonElement>('button[aria-label="Remove quote"]');
+    if (!remove) throw new Error("Quote remove button missing");
+    flushSync(() => remove.click());
+    assert(!host.querySelector("q"), "The quote can be removed separately");
+    assert(readEditorValue(controller.ref.current!) === question, "Removing the quote preserves the question");
+    assert(submissions.length === 0, "Removing a quote never sends");
+    addQuote();
+    const send = async () => {
+      flushSync(() => controller.ref.current!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      ));
+      await latestSubmission;
+      flushSync(() => {});
+      await new Promise<void>((resolve) => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
+        channel.port2.postMessage(null);
+      });
+    };
+    await send();
+    assert(host.querySelector("q")?.textContent === excerpt, "Failed submission restores the separate quote");
+    assert(readEditorValue(controller.ref.current!) === question, "Failed submission restores the question");
+    accept = true;
+    await send();
+    assert(submissions.length === 2 && submissions.every((content) => content === `${question}\n\n> ${excerpt}`),
+      "The submit path sends the quote and question together with distinct formatting");
+    assert(!host.querySelector("q") && !readEditorValue(controller.ref.current!), "Successful send clears the draft");
+    return { ok: true };
+  } finally {
+    historySendPrompt = previousSend;
+    submitted = previousSubmissionCount;
+    flushSync(() => root.unmount());
+    host.remove();
+    resetComposerDraftCache();
+  }
+};
 
 globalThis.composerPasteProbe = async () => {
   const i18n = createInstance();

@@ -414,6 +414,8 @@ export const es = {
     "messageMenu": "Acciones del mensaje",
     "conversationMenu": "Acciones de la conversación",
     "selectMessageText": "Seleccionar el texto del mensaje",
+    quoteInComposer: "Citar en el campo de mensaje",
+    removeComposerQuote: "Quitar cita",
     "copyConversation": "Copiar la conversación",
     "copyLastAnswer": "Copiar última respuesta",
     "radialMenuOpenBrowser": "Abrir navegador",
