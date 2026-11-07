@@ -137,7 +137,8 @@ export function useComposerDraft({
   inputBlocked,
 }: UseComposerDraftOptions): ComposerDraftController {
   const draftKey = draftKeyForSession(activeSessionId);
-  const quotes = useSyncExternalStore(subscribeComposerQuotes, () => readComposerQuotes(draftKey));
+  const quoteSnapshot = () => readComposerQuotes(draftKey);
+  const quotes = useSyncExternalStore(subscribeComposerQuotes, quoteSnapshot, quoteSnapshot);
   const referenceSessionId = activeSessionId ?? "";
   const initialDraft = readComposerDraft(draftKey);
   // Images are inline chips, so a draft cached by an older build regains one
