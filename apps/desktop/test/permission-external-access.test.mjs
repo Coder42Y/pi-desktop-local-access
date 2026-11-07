@@ -171,13 +171,25 @@ test("external filesystem permission renders host scope and dispatches explicit 
 try {
   await import("./renderer.js");
   await window.permissionProbe();
-  document.body.dataset.permissionProbe = "passed";
+  await fetch("/result", { method: "POST", body: JSON.stringify({ passed: true }) });
 } catch (error) {
-  document.body.dataset.permissionProbe = "failed";
-  document.body.append(String(error?.stack ?? error));
+  await fetch("/result", { method: "POST", body: JSON.stringify({ passed: false, error: String(error?.stack ?? error) }) });
 }
 </script>`);
+      let reportResult;
+      const result = new Promise((resolve) => { reportResult = resolve; });
       const server = createHttpServer(async (request, response) => {
+        if (request.url === "/result" && request.method === "POST") {
+          const chunks = [];
+          for await (const chunk of request) chunks.push(chunk);
+          try {
+            reportResult(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+            response.end("ok");
+          } catch {
+            response.writeHead(400).end();
+          }
+          return;
+        }
         const file = request.url === "/renderer.js" ? "renderer.js" : "index.html";
         try {
           response.setHeader("content-type", file.endsWith(".js") ? "text/javascript" : "text/html; charset=utf-8");
@@ -185,22 +197,36 @@ try {
         } catch { response.writeHead(500).end(); }
       });
       await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+      let child;
+      let exited;
+      let output = "";
+      let deadline;
       try {
-        const child = spawn(chromiumBinary, ["--headless", "--disable-gpu", "--no-first-run",
+        child = spawn(chromiumBinary, ["--headless", "--disable-gpu", "--no-first-run",
           ...(process.platform === "linux" && process.env.CI === "true" ? ["--no-sandbox"] : []),
-          "--disable-background-networking", "--dump-dom", "--timeout=20000", "--virtual-time-budget=10000",
+          "--disable-background-networking",
           `--user-data-dir=${join(temp, "chromium-profile")}`, `http://127.0.0.1:${server.address().port}/`],
           { stdio: ["ignore", "pipe", "pipe"] });
-        let output = "";
         for (const stream of [child.stdout, child.stderr]) stream.on("data", (chunk) => { output += chunk; });
-        const timer = setTimeout(() => child.kill("SIGKILL"), 30000);
-        let code;
-        try { code = await new Promise((resolve, reject) => {
-          child.once("error", reject); child.once("close", resolve);
-        }); } finally { clearTimeout(timer); }
-        assert.equal(code, 0, output.slice(-6000));
-        assert.match(output, /data-permission-probe="passed"/, output.slice(-6000));
-      } finally { await new Promise((resolve) => server.close(resolve)); }
+        exited = new Promise((resolve) => {
+          child.once("error", (error) => resolve({ passed: false, error: error.message }));
+          child.once("close", (code) => resolve({ passed: false, error: `browser exited with ${code}` }));
+        });
+        const timedOut = new Promise((resolve) => {
+          deadline = setTimeout(() => resolve({ passed: false, error: "browser scenario timed out" }), 60000);
+        });
+        const observed = await Promise.race([result, exited, timedOut]);
+        assert.equal(observed.passed, true, JSON.stringify(observed) + "\n" + output.slice(-6000));
+      } finally {
+        clearTimeout(deadline);
+        if (child && child.exitCode === null) {
+          child.kill();
+          const forceStop = setTimeout(() => child.kill("SIGKILL"), 5000);
+          try { await exited; } finally { clearTimeout(forceStop); }
+        }
+        server.closeAllConnections();
+        await new Promise((resolve) => server.close(resolve));
+      }
       return;
     }
     await writeFile(join(temp, "main.cjs"), `
