@@ -414,6 +414,8 @@ export const de = {
     "messageMenu": "Nachrichtenaktionen",
     "conversationMenu": "Gesprächsaktionen",
     "selectMessageText": "Nachrichtentext auswählen",
+    quoteInComposer: "Im Eingabefeld zitieren",
+    removeComposerQuote: "Zitat entfernen",
     "copyConversation": "Gespräch kopieren",
     "copyLastAnswer": "Letzte Antwort kopieren",
     "radialMenuOpenBrowser": "Browser öffnen",

@@ -3398,6 +3398,22 @@ reasoning-level control.
   `--ds-bg-composer` with `--ds-shadow-composer` like queued prompt rows rather
   than the in-flow `--ds-tile` wash.
 
+#### Quote selected model text (fork NEXT-003)
+
+- Selecting text within a model reply and choosing **Quote in composer** from
+  the reply's context menu adds the excerpt to the current conversation's draft.
+  The quote is a separate, removable passage above the editable text, with
+  quotation marks and a subdued background. Existing text and attachments
+  stay in the draft.
+- Quoting and removing a quote do not send. An explicit submission sends each
+  excerpt as a Markdown blockquote after the user's request, separated by a
+  blank line. A draft containing a quote uses prompt submission even when the
+  request begins with a slash. Skill tokens and session links inside quoted
+  passages stay literal.
+- Quotes follow the existing per-conversation in-memory draft lifetime and
+  restore with an unsuccessful send. Accepted prompt history can recall them
+  as separate passages. Quote text does not get an instruction role.
+
 ### 11.6 Accessibility
 
 - `role="textbox"` with `aria-label="Message input"`

@@ -426,6 +426,8 @@ export const ko = {
     actionSlotMore: "더 많은 작업",
     conversationMenu: "대화 작업",
     selectMessageText: "메시지 텍스트 선택",
+    quoteInComposer: "입력창에 인용",
+    removeComposerQuote: "인용 삭제",
     copyConversation: "대화 복사",
     copyLastAnswer: "마지막 답변 복사",
     radialMenuOpenBrowser: "브라우저 열기",

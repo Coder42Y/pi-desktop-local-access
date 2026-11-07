@@ -1,3 +1,4 @@
+import { maskPromptQuoteLines } from "./prompt-quote-lines.js";
 import { formatSessionLink } from "./session-link.js";
 
 /**
@@ -133,13 +134,13 @@ export function detectTrigger(
 
 export type SkillMention = { start: number; end: number; id: string };
 
-/** Resolve complete slash tokens against the active Skill catalog at send time. */
+/** Resolve complete slash tokens outside explicit Markdown quote lines. */
 export function findSkillMentions(
   content: string,
   skillIds: ReadonlyMap<string, string>,
 ): SkillMention[] {
   const mentions: SkillMention[] = [];
-  for (const match of content.matchAll(/(^|\s)\/([^\s]+)/g)) {
+  for (const match of maskPromptQuoteLines(content).matchAll(/(^|\s)\/([^\s]+)/g)) {
     const id = skillIds.get(match[2]);
     if (!id) continue;
     const start = match.index + match[1].length;

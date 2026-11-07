@@ -1,3 +1,4 @@
+import { sameComposerQuotes } from "./composer-draft-cache.ts";
 import type { ComposerDraftSnapshot } from "./composer-smart-stop";
 
 /**
@@ -10,10 +11,7 @@ import type { ComposerDraftSnapshot } from "./composer-smart-stop";
  * missing, blocked, or corrupted store yields an empty history and never breaks
  * sending.
  */
-export type ComposerHistoryEntry = {
-  text: string;
-  fileReferences: ComposerDraftSnapshot["fileReferences"];
-};
+export type ComposerHistoryEntry = ComposerDraftSnapshot;
 
 type HistoryBucket = { sessionId: string; entries: ComposerHistoryEntry[] };
 
@@ -59,8 +57,11 @@ function readEntry(value: unknown): ComposerHistoryEntry | null {
     if (!parsed) return null;
     fileReferences.push(parsed);
   }
-  if (!row.text.trim() && fileReferences.length === 0) return null;
-  return { text: row.text, fileReferences };
+  const quotes = Array.isArray(row.quotes)
+    ? row.quotes.filter((quote): quote is string => typeof quote === "string" && Boolean(quote.trim()))
+    : [];
+  if (!row.text.trim() && !fileReferences.length && !quotes.length) return null;
+  return { text: row.text, fileReferences, ...(quotes.length ? { quotes } : {}) };
 }
 
 /** Tolerant read: malformed buckets, entries, and rows are dropped, not fatal. */
@@ -114,6 +115,7 @@ export function loadComposerInputHistory(sessionId: string): ComposerHistoryEntr
 function sameContent(left: ComposerHistoryEntry, right: ComposerHistoryEntry): boolean {
   return (
     left.text === right.text &&
+    sameComposerQuotes(left.quotes, right.quotes) &&
     left.fileReferences.length === right.fileReferences.length &&
     left.fileReferences.every(
       (reference, index) => reference.path === right.fileReferences[index]?.path,
@@ -127,9 +129,9 @@ export function rememberComposerInput(
   snapshot: ComposerDraftSnapshot,
 ): void {
   if (!sessionId) return;
-  if (!snapshot.text.trim() && snapshot.fileReferences.length === 0) return;
+  if (!snapshot.text.trim() && !snapshot.fileReferences.length && !snapshot.quotes?.length) return;
   const entry: ComposerHistoryEntry = {
-    text: snapshot.text,
+    ...snapshot,
     fileReferences: snapshot.fileReferences.map((reference) => ({ ...reference })),
   };
   const buckets = readBuckets();

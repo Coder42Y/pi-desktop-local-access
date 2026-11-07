@@ -35,6 +35,7 @@ export type ComposerDraftFileReference = {
 export type ComposerDraftSnapshot = {
   text: string;
   fileReferences: ComposerDraftFileReference[];
+  quotes?: readonly string[];
 };
 
 export type ComposerPrefill = ComposerDraftSnapshot & {

@@ -208,7 +208,6 @@ export function Composer({
     referenceSessionId,
     draft,
   });
-
   const approvalPending = planCheckpoint?.status === "pending";
   const largePasteThreshold = normalizeLargePasteThreshold(
     settings?.largePasteThreshold,
@@ -252,7 +251,7 @@ export function Composer({
   // captured draft becomes the input, so the input must be empty first: the
   // live read is the only current source (the draft cache is not per keystroke).
   const handleEditQueuedPrompt = (id: string) => {
-    if (readLiveDraft().trim() || activeFileReferences.length) {
+    if (readLiveDraft().trim() || activeFileReferences.length || draft.quotes.length) {
       showToast(t("chat.editQueuedPromptBusy"), { variant: "info" });
       return;
     }
@@ -413,7 +412,7 @@ export function Composer({
       !isImageGenerationModel(imageGenerationCandidates, provider.id, modelId) &&
       (provider.hasSecret || provider.authKind === "none");
   const enterToSend = settings?.enterToSend ?? true;
-  const hasDraftContent = Boolean(value.trim() || activeFileReferences.length);
+  const hasDraftContent = Boolean(value.trim() || activeFileReferences.length || draft.quotes.length);
 
   useEffect(() => {
     if (!controlsBlocked) return;
@@ -580,6 +579,7 @@ export function Composer({
           ) : null}
           <ComposerInput
             imagePreview={draft.imagePreview}
+            quoteDraft={draft}
             inputRef={ref}
             value={value}
             placeholderText={placeholderText}
