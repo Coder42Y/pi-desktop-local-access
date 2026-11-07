@@ -10,10 +10,10 @@ repository visibility changes, remote publishing or a release.
 |---|---|---|---|
 | NEXT-001 | Restore reliable update discovery and delivery for customized builds | Published; installed macOS update flow still needs confirmation | v0.21.0-local.3 |
 | NEXT-002 | Reuse saved SSH connection configuration across conversations and application restarts | Merged for new SSH workspaces; native Desktop restart acceptance pending | Merged in PR #5 |
-| NEXT-003 | Quote selected text in the composer, starting with model replies | Implemented in the task candidate | To be scheduled |
+| NEXT-003 | Quote selected text in the composer, starting with model replies | Merged in PR #9; release candidate | v0.21.0-local.4 |
 | NEXT-004 | Align and de-emphasize the SSH Upload indicator with explicit success/failure icons | Merged; installed-plugin UI acceptance pending | Merged with the SSH Upload source |
-| NEXT-005 | Adopt upstream local file-link handling and retain fork SSH previews | Backlog — approach agreed | To be scheduled |
-| NEXT-006 | Adopt upstream background Bash controls under fork authorization | Backlog — approach agreed | To be scheduled |
+| NEXT-005 | Adopt upstream local file-link handling and retain fork SSH previews | Merged in PR #10; release candidate | v0.21.0-local.4 |
+| NEXT-006 | Adopt upstream background Bash controls under fork authorization | Merged in PR #11; release candidate | v0.21.0-local.4 |
 | NEXT-007 | Bring upstream Computer Use to the fork | Local candidate; pending fork integration | To be scheduled |
 | NEXT-008 | Bring upstream Composer model picker to the fork | Local candidate; pending fork integration | To be scheduled |
 | NEXT-009 | Bring upstream plugin launcher grid to the fork | Local candidate; pending fork integration | To be scheduled |
