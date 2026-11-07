@@ -1,0 +1,27 @@
+{
+  "result": "PASS",
+  "version": "0.21.0-local.4",
+  "target": {
+    "platform": "linux",
+    "arch": "arm64"
+  },
+  "archiveSha256": "dcd6b49800368f63c3479cf54ff4e25548b9fac3ec89b1b76f98f312f0a9b128",
+  "source": "https://github.com/Coder42Y/pi-desktop-local-access/releases/download/v0.21.0-local.4/pi-host-0.21.0-local.4-linux-arm64.tar.gz",
+  "mode": "verified SSH upload",
+  "checks": [
+    "bootstrap",
+    "version",
+    "pairing",
+    "tunnel",
+    "external Read",
+    "absent/false/forged grants denied",
+    "strict schema",
+    "owner Write/Edit/Bash",
+    "reconnect",
+    "isolated cleanup"
+  ],
+  "commit": "1588e6dbfe4920a239f660635f4db8aa3e4c3d9c",
+  "nativeBuildRun": 42340436461,
+  "environment": "Linux arm64 with a temporary loopback OpenSSH daemon and isolated keys and profile",
+  "testScript": "scripts/e2e-ssh-fork-release.mjs"
+}
