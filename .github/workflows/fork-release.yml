@@ -1,5 +1,5 @@
-name: Fork release packages
-run-name: Fork release packages at ${{ github.sha }}
+name: Stage 0.21.0-local.4
+run-name: Stage 0.21.0-local.4 draft from verified native artifacts
 
 on:
   workflow_dispatch:
@@ -8,271 +8,62 @@ permissions:
   contents: read
 
 concurrency:
-  group: fork-release-${{ github.sha }}
+  group: fork-release-stage-local-4
   cancel-in-progress: false
 
+env:
+  BUILD_RUN: '42340436461'
+  SOURCE_SHA: 1588e6dbfe4920a239f660635f4db8aa3e4c3d9c
+  RELEASE_TAG: v0.21.0-local.4
+
 jobs:
-  verify:
-    if: github.repository == 'Coder42Y/pi-desktop-local-access'
+  stage:
+    if: github.repository == 'Coder42Y/pi-desktop-local-access' && github.ref == 'refs/heads/codex/release-local-4'
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 25
+    permissions:
+      actions: read
+      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: pnpm
-
-      - name: Guard local version and reject existing tag or Release
+      - name: Verify the pinned native run and publication target
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          node --input-type=module <<'NODE'
-          import { readFile } from 'node:fs/promises';
-          const desktop = JSON.parse(await readFile('apps/desktop/package.json', 'utf8'));
-          const host = JSON.parse(await readFile('apps/pi-host/package.json', 'utf8'));
-          const protocol = await readFile('packages/shared/src/protocol.ts', 'utf8');
-          const shared = protocol.match(/export const APP_VERSION = ["']([^"']+)["'];/)?.[1];
-          const version = desktop.version;
-          if (!/^\d+\.\d+\.\d+-local\.(0|[1-9]\d*)$/.test(version) ||
-              [desktop.build.extraMetadata.version, host.version, shared].some(value => value !== version)) {
-            throw new Error('desktop, extraMetadata, pi-host and APP_VERSION must all equal X.Y.Z-local.N');
-          }
-          if (desktop.build.publish.some(feed => feed.channel !== 'local')) {
-            throw new Error('Fork updater channel must remain local');
-          }
-          const tag = `v${version}`;
-          for (const resource of [`git/ref/tags/${tag}`, `releases/tags/${tag}`]) {
-            const response = await fetch(`${process.env.GITHUB_API_URL}/repos/${process.env.GITHUB_REPOSITORY}/${resource}`, {
-              headers: { Authorization: `Bearer ${process.env.GH_TOKEN}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
-            });
-            if (response.status !== 404) throw new Error(`${resource}: expected absent (404), got ${response.status}; never overwrite a tag or Release`);
-          }
-          console.log(`Verified unpublished ${tag} at ${process.env.GITHUB_SHA}`);
-          NODE
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      - name: Build workspace JavaScript
-        run: pnpm build:js
-      - name: Typecheck Desktop and pi-host
-        run: |
-          pnpm --filter @pi-desktop/desktop typecheck
-          pnpm --filter @pi-desktop/pi-host typecheck
-      - name: Lint
-        run: pnpm lint
-      - name: Bootstrap, remote and custom updater tests
-        run: node --test apps/desktop/test/fork-*.test.mjs apps/desktop/test/remote-host-pi-host-release.test.mjs apps/desktop/test/remote-host-bootstrap-script.test.mjs apps/desktop/test/remote-host-ssh-bootstrap.test.mjs apps/desktop/test/remote-host-realign.test.mjs apps/desktop/test/remote-workspace-tools.test.mjs apps/desktop/test/racp-remote-host-client.test.mjs apps/desktop/test/custom-update-*.test.mjs
-      - name: Shared schema tests
-        run: pnpm --filter @pi-desktop/shared test
-      - name: pi-host tests
-        run: pnpm --filter @pi-desktop/pi-host test
-      - name: RACP authorization tests
-        run: pnpm --filter @pi-desktop/racp test
-
-  desktop:
-    needs: verify
-    name: Desktop ${{ matrix.platform }} ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-22.04, platform: linux, arch: x64, dist: 'dist:linux', feed: local-linux.yml }
-          - { os: ubuntu-22.04-arm, platform: linux, arch: arm64, dist: 'dist:linux', feed: local-linux-arm64.yml }
-          - { os: macos-15, platform: mac, arch: arm64, dist: 'dist:mac', feed: local-mac.yml }
-          - { os: macos-15-intel, platform: mac, arch: x64, dist: 'dist:mac', feed: local-mac.yml }
-          - { os: windows-latest, platform: win, arch: x64, dist: 'dist:win', feed: local.yml }
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 90
-    defaults:
-      run:
-        shell: bash
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-    steps:
-      - uses: actions/checkout@v7
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$BUILD_RUN" > "$RUNNER_TEMP/native-run.json"
+          jq -e --arg sha "$SOURCE_SHA" '.head_sha == $sha and .status == "completed" and .conclusion == "success" and .event == "workflow_dispatch" and .path == ".github/workflows/fork-release.yml"' "$RUNNER_TEMP/native-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...main" --jq .status | grep -Ex 'ahead|identical'
+          node scripts/release-staging/guard-release.mjs
+      - uses: actions/download-artifact@v8
         with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Verify native architecture and pinned source
-        env:
-          EXPECTED_ARCH: ${{ matrix.arch }}
-        run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          node -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Native runner architecture mismatch")'
-
-      - name: Prepare package inputs
+          github-token: ${{ github.token }}
+          run-id: ${{ env.BUILD_RUN }}
+          pattern: fork-*
+          path: ${{ runner.temp }}/local4-release/artifacts
+      - name: Verify provenance, checksums and local update feeds
         run: |
           set -euo pipefail
-          cargo build --release --locked -p host-core &
-          host_build_pid=$!
-          trap 'kill "$host_build_pid" 2>/dev/null || true' EXIT
-          pnpm install --frozen-lockfile
-          pnpm --filter '@pi-desktop/desktop^...' --fail-if-no-match build
-          wait "$host_build_pid"
-          trap - EXIT
-
-      - name: Package unsigned installers without publishing
-        run: pnpm --filter @pi-desktop/desktop run ${{ matrix.dist }} -- --${{ matrix.arch }}
-      - name: Verify Linux glibc floor
-        if: matrix.platform == 'linux'
-        run: node scripts/check-linux-host-glibc.mjs target/release/pi-desktop-host-core
-      - name: Verify macOS custom update metadata
-        if: matrix.platform == 'mac'
-        run: node scripts/check-custom-update-release.mjs
-
-      - name: Record provenance and SHA-256 checksums
+          if ! /usr/bin/python3 -c 'import yaml'; then
+            sudo apt-get update
+            sudo apt-get install --no-install-recommends -y python3-yaml
+          fi
+          node scripts/release-staging/verify-artifacts.mjs "$RUNNER_TEMP/local4-release"
+      - name: Stage and verify the draft
         env:
-          PACKAGE_PLATFORM: ${{ matrix.platform }}
-          PACKAGE_ARCH: ${{ matrix.arch }}
-          PACKAGE_FEED: ${{ matrix.feed }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { createHash } from 'node:crypto';
-          import { createReadStream } from 'node:fs';
-          import { readFile, readdir, writeFile, stat } from 'node:fs/promises';
-          const root = 'apps/desktop/release';
-          const pkg = JSON.parse(await readFile('apps/desktop/package.json', 'utf8'));
-          const entries = await readdir(root);
-          if (entries.some(name => /^latest.*\.yml$/.test(name))) throw new Error('Unexpected latest updater feed');
-          const names = entries.filter(name => /\.(dmg|zip|exe|AppImage|deb|rpm|blockmap)$/.test(name) || /^local.*\.yml$/.test(name)).sort();
-          const required = { mac: ['.dmg', '-mac.zip'], win: [`PI-Desktop-Setup-${pkg.version}.exe`, `PI-Desktop-Portable-${pkg.version}.exe`, `PI-Desktop-Portable-${pkg.version}.zip`], linux: ['.AppImage', '.deb', '.rpm'] }[process.env.PACKAGE_PLATFORM];
-          for (const suffix of [...required, process.env.PACKAGE_FEED]) {
-            if (!names.some(name => name.endsWith(suffix))) throw new Error(`Missing package ${suffix}`);
-          }
-          const files = [];
-          for (const name of names) {
-            const file = `${root}/${name}`;
-            const info = await stat(file);
-            if (!info.isFile() || info.size === 0) throw new Error(`Invalid artifact ${name}`);
-            const hash = createHash('sha256');
-            for await (const chunk of createReadStream(file)) hash.update(chunk);
-            files.push({ name, size: info.size, sha256: hash.digest('hex') });
-          }
-          const provenance = { commit: process.env.GITHUB_SHA, version: pkg.version,
-            platform: process.env.PACKAGE_PLATFORM, arch: process.env.PACKAGE_ARCH,
-            signing: 'unsigned; not notarized', files };
-          const metadata = JSON.stringify(provenance, null, 2) + '\n';
-          await writeFile(`${root}/provenance.json`, metadata);
-          files.push({ name: 'provenance.json', sha256: createHash('sha256').update(metadata).digest('hex') });
-          await writeFile(`${root}/SHA256SUMS`, files.map(file => `${file.sha256}  ${file.name}`).join('\n') + '\n');
-          NODE
-
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release-staging/stage-release.mjs "$RUNNER_TEMP/local4-release"
       - uses: actions/upload-artifact@v7
         with:
-          name: fork-desktop-${{ matrix.platform }}-${{ matrix.arch }}
-          retention-days: 14
-          if-no-files-found: error
-          compression-level: 0
+          name: fork-release-publication-evidence
           path: |
-            apps/desktop/release/*.dmg
-            apps/desktop/release/*.zip
-            apps/desktop/release/*.exe
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb
-            apps/desktop/release/*.rpm
-            apps/desktop/release/*.blockmap
-            apps/desktop/release/local*.yml
-            apps/desktop/release/SHA256SUMS
-            apps/desktop/release/provenance.json
-
-  pi-host:
-    needs: verify
-    name: pi-host Linux ${{ matrix.arch }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: ubuntu-22.04, arch: x64 }
-          - { os: ubuntu-22.04-arm, arch: arm64 }
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Verify native architecture and pinned source
-        env:
-          EXPECTED_ARCH: ${{ matrix.arch }}
-        run: |
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          node -e 'if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Native runner architecture mismatch")'
-
-      - name: Build bundle inputs
-        run: |
-          set -euo pipefail
-          cargo build --release --locked -p host-core &
-          host_build_pid=$!
-          trap 'kill "$host_build_pid" 2>/dev/null || true' EXIT
-          pnpm install --frozen-lockfile
-          pnpm build:js
-          pnpm --filter @pi-desktop/agent-runtime bundle
-          pnpm --filter @pi-desktop/pi-host build
-          wait "$host_build_pid"
-          trap - EXIT
-      - name: Verify host-core glibc floor
-        run: node scripts/check-linux-host-glibc.mjs target/release/pi-desktop-host-core
-      - name: Assemble pi-host bundle
-        run: node apps/pi-host/scripts/bundle.mjs --platform linux --arch ${{ matrix.arch }}
-      - name: Archive official layout and record checksums and provenance
-        env:
-          PACKAGE_ARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-          VERSION="$(node -p "require('./apps/pi-host/package.json').version")"
-          name="pi-host-${VERSION}-linux-${PACKAGE_ARCH}"
-          out="apps/pi-host/dist-bundle"
-          test -d "$out/$name"
-          tar -czf "$out/${name}.tar.gz" -C "$out" "$name"
-          ( cd "$out" && sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256" )
-          node --input-type=module <<'NODE'
-          import { createHash } from 'node:crypto';
-          import { readFile, writeFile } from 'node:fs/promises';
-          const root = 'apps/pi-host/dist-bundle';
-          const pkg = JSON.parse(await readFile('apps/pi-host/package.json', 'utf8'));
-          const name = `pi-host-${pkg.version}-linux-${process.env.PACKAGE_ARCH}.tar.gz`;
-          const provenance = { commit: process.env.GITHUB_SHA, version: pkg.version,
-            platform: 'linux', arch: process.env.PACKAGE_ARCH };
-          await writeFile(`${root}/provenance.json`, JSON.stringify(provenance, null, 2) + '\n');
-          const sums = [];
-          for (const file of [name, `${name}.sha256`, 'provenance.json']) {
-            sums.push(`${createHash('sha256').update(await readFile(`${root}/${file}`)).digest('hex')}  ${file}`);
-          }
-          await writeFile(`${root}/SHA256SUMS`, sums.join('\n') + '\n');
-          NODE
-      - uses: actions/upload-artifact@v7
-        with:
-          name: fork-pi-host-linux-${{ matrix.arch }}
-          retention-days: 14
+            ${{ runner.temp }}/local4-release/release-manifest.json
+            ${{ runner.temp }}/local4-release/upload-verification.json
           if-no-files-found: error
-          compression-level: 0
-          path: |
-            apps/pi-host/dist-bundle/pi-host-*-linux-${{ matrix.arch }}.tar.gz
-            apps/pi-host/dist-bundle/pi-host-*-linux-${{ matrix.arch }}.tar.gz.sha256
-            apps/pi-host/dist-bundle/provenance.json
-            apps/pi-host/dist-bundle/SHA256SUMS
+          retention-days: 14
