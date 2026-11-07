@@ -1,3 +1,4 @@
+mod background_jobs;
 mod config_sync_rpc;
 mod file_batches;
 mod gen_ui;
@@ -1977,6 +1978,10 @@ async fn handle_request(
         return config_sync_rpc::handle(state, method, params, tx)
             .await
             .map_err(config_sync_rpc_err);
+    }
+
+    if method.starts_with("backgroundJobs.") {
+        return background_jobs::handle(state, method, params).await;
     }
 
     if method.starts_with("tools.fileBatch") {
@@ -4757,6 +4762,27 @@ async fn handle_request(
                 if p.tool_name == "Bash" && remote_workspace.is_none() {
                     let (shell_id, cancellation) = {
                         let st = state.lock().await;
+                        // Admission can yield after approval. A detached process
+                        // must still be within the active delivery's scope.
+                        if p.run_in_background
+                            && (!external_path_permission
+                                || !crate::session_collaboration::permissions::external_allowed(
+                                    &st.db,
+                                    &p.session_id,
+                                    None,
+                                )
+                                .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"))?)
+                        {
+                            let result = shell_failure_result(
+                                &p,
+                                "TOOL_DENIED",
+                                "background Bash requires filesystem-write authorization",
+                                command_shell_id.clone(),
+                                call_started,
+                            );
+                            return serde_json::to_value(result)
+                                .map_err(|e| rpc_err(1000, e.to_string(), "INTERNAL"));
+                        }
                         let catalog = command_shell_catalog(&st)?;
                         let Some(effective) = catalog.effective.as_ref() else {
                             let result = shell_failure_result(

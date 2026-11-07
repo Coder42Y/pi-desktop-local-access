@@ -1,5 +1,9 @@
 # Unreleased changes
 
+- Let the local Agent list, wait for, and stop its conversation's background
+  Bash jobs, including retrieving the exit code and bounded output. Background
+  launches use the existing filesystem consent and delegated authority checks.
+
 - Open chat file references with uncommon extensions, dotfiles, and
   extensionless paths in the side panel, and browse linked project directories
   in File Manager. Local images outside the
