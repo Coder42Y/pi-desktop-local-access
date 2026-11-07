@@ -1,5 +1,9 @@
 # Unreleased changes
 
+- Let the local Agent list, wait for, and stop its conversation's background
+  Bash jobs, including retrieving the exit code and bounded output. Background
+  launches use the existing filesystem consent and delegated authority checks.
+
 - Preserve the initiating conversation's filesystem authorization throughout
   native deliveries, including queued/forwarded work and completion callbacks.
   Headless Hosts now execute and settle native messaging through the shared

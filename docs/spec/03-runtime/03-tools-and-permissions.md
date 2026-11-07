@@ -998,3 +998,24 @@ Bash; it is not a request to reuse the receiver's older grant. Actual Host runni
 turn identity is authoritative, even when caller turn metadata is absent/forged.
 New sends, spawns, reports and callbacks inherit the restricted ceiling. A later
 ordinary human turn retains its session's own grant.
+
+### Model access to background commands
+
+Starting a background Bash command uses the ordinary filesystem-write consent
+gate even in Auto mode. Native delivery also applies the initiating
+conversation's Host-specific ceiling before the process starts.
+
+In Agent mode the model can list, wait for and stop its session's background
+Bash jobs through TaskList, TaskWait and TaskStop. The job's Host record is the
+same record read by the desktop. Runtime supplies its bound session identity;
+model arguments cannot select a different session. Host requires an existing
+local Agent-mode session and resolves both read and stop by (sessionId, id).
+Unknown and foreign IDs return the same NOT_FOUND error.
+
+Waiting never kills a process. A one-second bounded Host observation can be
+abandoned on input or cancellation, and no global AppState lock is held during
+the wait. Terminal notification follows output draining. Explicit stop reuses
+the supervisor's process-tree cleanup and reports its actual settled outcome
+or a still-running snapshot with stopRequested. The model's reads and desktop
+reads do not consume each other's logs. Retention and Host restart still bound
+how long a finished ID can be queried.

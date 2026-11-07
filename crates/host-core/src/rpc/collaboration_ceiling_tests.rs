@@ -138,6 +138,7 @@ async fn native_delivery_snapshots_survive_grant_updates_and_forged_metadata() {
         };
         let outside = dir.path().join(format!("{case}-outside"));
         let bash_path = dir.path().join(format!("{case}-bash"));
+        let background_path = dir.path().join(format!("{case}-background"));
         let (tx, _rx) = mpsc::unbounded_channel();
         for (id, tool, args) in [
             (
@@ -150,17 +151,35 @@ async fn native_delivery_snapshots_survive_grant_updates_and_forged_metadata() {
                 "Bash",
                 json!({"command":format!("printf authorized > '{}'", bash_path.display())}),
             ),
+            (
+                "background",
+                "Bash",
+                json!({"command":format!("printf authorized > '{}'", background_path.display())}),
+            ),
         ] {
             let result = tokio::time::timeout(Duration::from_secs(5), handle_request(state.clone(), "tools.execute",
                 json!({"sessionId":target,"turnId":"forged-human-turn","toolCallId":format!("{case}-{id}"),
-                    "toolName":tool,"args":args,"mode":"agent","permissionScope":"auto",
+                    "toolName":tool,"args":args,"mode":"agent","permissionScope":"auto","runInBackground":id == "background",
                     "expectedCommandShellId":"bash","expectedCommandShellDialect":"posix"}), tx.clone()))
                 .await.expect("ceiling denial must not prompt").unwrap();
             assert_eq!(result["ok"], authorized, "{result}");
             if !authorized {
                 assert_eq!(result["errorCode"], "TOOL_DENIED");
+            } else if id == "background" {
+                let job = &result["content"]["job"];
+                assert_eq!(job["kind"], "bash");
+                let settled = handle_request(
+                    state.clone(),
+                    "backgroundJobs.wait",
+                    json!({"sessionId":target,"id":job["id"],"timeoutMs":1000}),
+                    tx.clone(),
+                )
+                .await
+                .unwrap();
+                assert_eq!(settled["state"], "exited", "{settled}");
             }
         }
+        assert_eq!(background_path.exists(), authorized);
         assert_eq!(outside.exists(), authorized);
         assert_eq!(bash_path.exists(), authorized);
         assert_eq!(
