@@ -4,6 +4,16 @@
   Bash jobs, including retrieving the exit code and bounded output. Background
   launches use the existing filesystem consent and delegated authority checks.
 
+- Open chat file references with uncommon extensions, dotfiles, and
+  extensionless paths in the side panel, and browse linked project directories
+  in File Manager. Local images outside the
+  project now require an explicit open. Finder reveal and SSH previews remain
+  available for their existing file routes.
+
+- Quote selected text from a model reply in the composer. Remove each quote
+  independently and send it with your question when ready.
+
+
 - Preserve the initiating conversation's filesystem authorization throughout
   native deliveries, including queued/forwarded work and completion callbacks.
   Headless Hosts now execute and settle native messaging through the shared

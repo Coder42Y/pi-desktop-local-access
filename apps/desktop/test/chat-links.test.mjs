@@ -46,7 +46,9 @@ function assertMarkdownLinkClick(markup, expectedPath) {
   );
   assert.equal(handled, true);
   assert.equal(prevented, true);
-  assert.deepEqual(calls, [[expectedPath, undefined]]);
+  // An explicit link destination may name a directory (issue #2113): the
+  // opener is always told the reference is deliberate.
+  assert.deepEqual(calls, [[expectedPath, undefined, undefined, { allowDirectory: true }]]);
 }
 
 test("Windows Markdown file links survive parsing and sanitization without changing their paths", () => {
@@ -97,6 +99,37 @@ test("Windows Markdown file links survive parsing and sanitization without chang
   assertMarkdownLinkClick(encodedSlashMarkup, "D:/person/dir name/报告.js");
 });
 
+test("explicit Markdown destinations keep their href without a file extension (issue #2113)", () => {
+  // A link destination is a deliberate reference: a drive-anchored directory
+  // (or extension-less file) keeps its href instead of being sanitized away
+  // as an unknown `c:` scheme, and the click routes through the file opener.
+  for (const destination of [String.raw`C:\link-demo\输出目录`, "C:/link-demo/输出目录"]) {
+    const markup = renderSanitizedMarkdown(`[目录](<${destination}>)`);
+    assertMarkdownLinkClick(markup, destination);
+  }
+
+  const plainMarkup = renderSanitizedMarkdown(String.raw`[目录](C:\link-demo\输出目录)`);
+  assertMarkdownLinkClick(plainMarkup, String.raw`C:\link-demo\输出目录`);
+
+  assertMarkdownLinkClick(renderSanitizedMarkdown("[build](<C:/repo/Makefile>)"), "C:/repo/Makefile");
+
+  // A relative directory destination keeps its href and routes through the
+  // opener against the workspace root.
+  const relMarkup = renderSanitizedMarkdown("[相对目录](examples/)");
+  const relHref = relMarkup.match(/<a href="([^"]+)"/)?.[1];
+  assert.ok(relHref, relMarkup);
+  const calls = [];
+  assert.equal(handleMarkdownFileLinkClick({ preventDefault() {} }, relHref, "/Users/dev/project", undefined,
+    (...args) => calls.push(args)), true);
+  assert.deepEqual(calls, [["examples", undefined, undefined, { allowDirectory: true }]]);
+
+  assertMarkdownLinkClick(
+    renderSanitizedMarkdown(String.raw`[目录](<C:\link-demo\输出目录%5C>)`),
+    'C:\\link-demo\\输出目录\\',
+  );
+  assertMarkdownLinkClick(renderSanitizedMarkdown("[source](<C:/project/src/>)"), "C:/project/src/");
+});
+
 test("positioned HTML references preserve source navigation through Markdown sanitization", () => {
   for (const source of [
     "Source: animation.html:12:3",
@@ -111,7 +144,7 @@ test("positioned HTML references preserve source navigation through Markdown san
     handleMarkdownFileLinkClick({ preventDefault() {} }, href, "D:/person", undefined,
       (...args) => calls.push(args));
     assert.deepEqual(calls, [[source.includes("D:/person") ? "D:/person/animation.html" : "animation.html",
-      undefined, undefined, { line: 12, column: 3 }]], source);
+      undefined, undefined, { line: 12, column: 3, allowDirectory: true }]], source);
   }
 });
 
@@ -119,6 +152,8 @@ test("file URL links survive sanitization only as references for main-process re
   for (const [url, path] of [
     ["file:///C:/scratch/animation.html", "C:/scratch/animation.html"],
     ["file:///tmp/my%20animation.html", "/tmp/my animation.html"],
+    ["file:///tmp/build-log", "/tmp/build-log"],
+    ["file:///C:/project/src/", "C:/project/src/"],
     ["file:///C:/scratch/%E9%B9%88%E9%B9%95.html", "C:/scratch/鹈鹕.html"],
   ]) {
     const markup = renderSanitizedMarkdown("[Open animation](<" + url + ">)");
@@ -169,7 +204,7 @@ test("parseFileRef accepts pathy tokens and strips line refs", () => {
   assert.equal(parseFileRef("docs/my project/page.md"), "docs/my project/page.md");
 });
 
-test("parseFileRef accepts bare names only with known extensions", () => {
+test("parseFileRef accepts filenames regardless of extension", () => {
   assert.equal(parseFileRef("README.md"), "README.md");
   assert.equal(parseFileRef("package.json"), "package.json");
   assert.equal(parseFileRef("Makefile"), "Makefile");
@@ -178,17 +213,17 @@ test("parseFileRef accepts bare names only with known extensions", () => {
   assert.equal(parseFileRef("report.md-v2"), "report.md-v2");
   assert.equal(parseFileRef("docs/report.md+long-version"), "docs/report.md+long-version");
   assert.equal(parseFileRef("docs/报告.中文"), "docs/报告.中文");
-  // dotted identifiers in prose stay plain
-  assert.equal(parseFileRef("store.messages"), null);
-  assert.equal(parseFileRef("store.messages+copy"), null);
-  assert.equal(parseFileRef("useAppStore.getState"), null);
+  assert.equal(parseFileRef("installer.dmg"), "installer.dmg");
+  assert.equal(parseFileRef("report.uncommonlylongextension"), "report.uncommonlylongextension");
+  assert.equal(parseFileRef(".env"), ".env");
+  assert.equal(parseFileRef("3.14"), null);
   assert.equal(parseFileRef("i.e."), null);
 });
 
 test("parseFileRef rejects non-path text", () => {
   assert.equal(parseFileRef("hello world"), null);
   assert.equal(parseFileRef("a/b vs c/d"), null);
-  assert.equal(parseFileRef("path/to/dir"), null);
+  assert.equal(parseFileRef("path/to/dir"), "path/to/dir");
   assert.equal(parseFileRef("foo.bar()"), null);
 });
 
@@ -368,9 +403,7 @@ test("suffix characters after extensions stay in path links", () => {
       .map((segment) => segment.target),
     [{ kind: "file", path: "report.md@draft" }],
   );
-  assert.deepEqual(splitChatText("Open store.messages+copy", ROOT), [
-    { kind: "text", text: "Open store.messages+copy" },
-  ]);
+
 });
 
 test("dotted directories do not split absolute file paths", () => {
@@ -786,10 +819,26 @@ test("a relative Unicode Markdown anchor reaches the local file opener", () => {
   assertMarkdownLinkClick(markup, "核查报告.md");
 });
 
-test("splitChatText keeps unknown extensions literal", () => {
-  assert.deepEqual(splitChatText("安装包.dmg 在下载目录", ROOT), [
-    { kind: "text", text: "安装包.dmg 在下载目录" },
-  ]);
+test("chat links accept uncommon names and leave ordinary words alone", () => {
+  for (const path of [
+    "安装包.dmg", "报告.自定义", "file.123", "report.uncommonlylongextension", "bin/tool", "/usr/local/tool",
+    String.raw`C:\project\tool`, ".env",
+  ]) {
+    assert.deepEqual(
+      splitChatText("Open " + path, ROOT).filter(segment => segment.kind === "target").map(segment => segment.target.path),
+      [path], path,
+    );
+  }
+  for (const text of ["ordinary words", "use 3.14", "person@example.com", "Run /compact"]) {
+    assert.deepEqual(splitChatText(text, ROOT), [{ kind: "text", text }]);
+  }
+  for (const [ref, path] of [
+    ["@customtool", "customtool"],
+    ['@"draft (final) [2] #1.🚀"', "draft (final) [2] #1.🚀"],
+  ]) {
+    assert.deepEqual(resolvePreviewTarget(ref, ROOT), { kind: "file", path });
+    assertMarkdownLinkClick(renderSanitizedMarkdown(ref), path);
+  }
 });
 
 test("an ascii filename followed by cjk prose still linkifies", () => {
@@ -956,4 +1005,37 @@ test("session links segment as their own target", () => {
   // A remote id and a bare scheme are not local conversations.
   assert.equal(resolvePreviewTarget("pi-desktop://session/remote:abc", ROOT), null);
   assert.equal(resolvePreviewTarget("pi-desktop://session/", ROOT), null);
+});
+
+test("an absolute Markdown link to an extensionless file still reaches the file opener", () => {
+  // The link destination is explicit, so the extension heuristic that keeps
+  // prose from turning into chips does not apply — for files and, since
+  // #2113, for directories too: the opener is told the reference is
+  // deliberate so an extension-less directory can resolve. The main process
+  // decides whether the path exists and may open (upstream ADR 0339).
+  for (const [source, root, expected] of [
+    ["[tool](</project/bin/tool>)", "/project", ["/project/bin/tool", undefined, undefined, { allowDirectory: true }]],
+    ["[directory](</sibling/docs/>)", "/project", ["/sibling/docs/", undefined, undefined, { allowDirectory: true }]],
+    ["[config](</Users/me/.ssh/config>)", null, ["/Users/me/.ssh/config", undefined, undefined, { allowDirectory: true }]],
+    ["[Makefile](</tmp/build dir/Makefile>)", "/Users/me/project", ["/tmp/build dir/Makefile", undefined, undefined, { allowDirectory: true }]],
+    ["[LICENSE](<D:/vendor/LICENSE>)", "D:/person", ["D:/vendor/LICENSE", undefined, undefined, { allowDirectory: true }]],
+    ["[notes](</tmp/notes:4>)", null, ["/tmp/notes", undefined, undefined, { line: 4, column: undefined, allowDirectory: true }]],
+  ]) {
+    const markup = renderSanitizedMarkdown(source);
+    const href = markup.match(/<a href="([^"]+)"/)?.[1];
+    assert.ok(href, source);
+    const calls = [];
+    let prevented = false;
+    const handled = handleMarkdownFileLinkClick(
+      { preventDefault: () => { prevented = true; } }, href, root, undefined,
+      (...args) => calls.push(args));
+    assert.equal(handled, true, source);
+    assert.equal(prevented, true, source);
+    assert.deepEqual(calls, [expected], source);
+  }
+  // A home path is not an absolute link destination and opens nothing.
+  const calls = [];
+  assert.equal(handleMarkdownFileLinkClick({ preventDefault() {} }, "~/.ssh/config", null, undefined,
+    (...args) => calls.push(args)), false);
+  assert.deepEqual(calls, []);
 });

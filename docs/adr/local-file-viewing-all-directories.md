@@ -14,6 +14,21 @@ The application no longer uses project membership to authorize a local absolute 
 
 No change is made to remote workspace dispatch, the local attachment-store detector, shared host-runtime defaults, plugin declarations/permissions, AI tool approvals or filesystem indexing. No database or protocol migration is required.
 
+## Amendment for NEXT-005
+
+The initial disk-root approach is replaced by exact, absolute local-file
+resolution for user-initiated preview, OS open, and Finder reveal. The real
+target must be an existing regular file. Automatic inline images use the
+managed roots and realpath containment, including for symlinks. Exact
+directories can be resolved within the managed roots when the caller opts in;
+the bundled file manager only browses project folders. Relative completion,
+plugin filesystem scope, agent consent, and SSH routing keep their own
+existing restrictions. This keeps local absolute file links while removing the
+disk-root exception from automatic loading.
+
+See [upstream design decision](https://github.com/vastsa/PI-Desktop/blob/020b5ddda/docs/adr/0339-chat-file-refs-open-absolute-files-outside-managed-roots.md)
+for the source design.
+
 ## Alternatives
 
 - Register only the test directory: narrower, but explicitly rejected by the user's request for all directories.

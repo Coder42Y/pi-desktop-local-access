@@ -3,6 +3,7 @@ import {
   applyCompletion,
   detectTrigger,
   fileReferenceLabel,
+  findSkillMentions,
   formatCommandInsert,
   formatFileInsert,
   normalizeLargePasteThreshold,
@@ -299,5 +300,13 @@ describe("compact file references", () => {
     // Token or not, a session reference never becomes an appended @path.
     expect(serializeComposerFileReferences("", [reference])).toBe("");
     expect(serializeComposerFileReferences("", [{ path: id, kind: "session" }])).toBe("");
+  });
+});
+
+describe("findSkillMentions", () => {
+  it("treats explicit Markdown blockquotes as literal excerpts", () => {
+    const content = "Use /review\r\n\r\n> /example\r\n  > Try /example again";
+    const skills = new Map([["review", "review-id"], ["example", "example-id"]]);
+    expect(findSkillMentions(content, skills)).toEqual([{ start: 4, end: 11, id: "review-id" }]);
   });
 });

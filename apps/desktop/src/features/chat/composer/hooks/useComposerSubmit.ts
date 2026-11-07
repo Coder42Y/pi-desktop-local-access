@@ -12,6 +12,7 @@ import {
   resolveSlashDispatch,
 } from "../slash-dispatch";
 import { readEditorValue, type ComposerFileReference } from "../editor";
+import { quotePrompt } from "../quote-prompt";
 import { nextSendableQueuedPrompt, type QueuedPrompt } from "../../../../lib/queued-prompts";
 import type { ComposerDraftSnapshot } from "../../../../lib/composer-smart-stop";
 import type { ComposerDraftController } from "./useComposerDraft";
@@ -86,7 +87,8 @@ export function useComposerSubmit({
     // so the steer shortcut would otherwise find no draft and do nothing. With
     // the composer empty it sends the first waiting row now instead, which is
     // the same promotion its own Send now button performs.
-    if (!serializedContent) {
+    const submittedDraft = draft.draftSnapshot(rawText);
+    if (!serializedContent && !submittedDraft.quotes?.length) {
       const waiting = steering && !sendBlocked ? nextSendableQueuedPrompt(queuedPrompts) : undefined;
       if (waiting) await sendQueuedNow(waiting.id);
       return;
@@ -98,7 +100,7 @@ export function useComposerSubmit({
     invalidateComposerTransforms();
     const submittedDraftKey = draftKey;
     const submittedDraftRevision = draft.draftRevision(submittedDraftKey);
-    const submittedDraft = draft.draftSnapshot(rawText);
+    const content = quotePrompt(inlineContent, submittedDraft.quotes);
     // Recall keeps what the user typed, in the conversation that submitted it.
     // For a mode command that is the whole `/agent …` text rather than its body,
     // so re-submitting re-runs it; every other recorded path stores exactly the
@@ -116,7 +118,8 @@ export function useComposerSubmit({
     // command source that cannot be read is a third case: the composer cannot
     // prove `/compact` is not a builtin, so it refuses the submission and keeps
     // the text out of the model's input (issue #795).
-    if (!steering && localCommandsAllowed) {
+    // A draft with an excerpt is a message, even when its question starts with a slash.
+    if (!steering && localCommandsAllowed && !submittedDraft.quotes?.length) {
       const slashSubmission = parseSlashSubmission(serializedContent);
       const resolution = slashSubmission
         ? await resolveComposerCommand(slashSubmission.name)
@@ -197,9 +200,9 @@ export function useComposerSubmit({
     const accepted = await submitWithLatestDraftRestore(
       submittedDraftKey,
       () => steering
-        ? steerPrompt(inlineContent, submittedDraft)
+        ? steerPrompt(content, submittedDraft)
         : sendPrompt(
-            inlineContent,
+            content,
             submittedDraft,
             activeSessionId ?? undefined,
             captureAcceptedSession,

@@ -184,6 +184,33 @@
   outline-offset: 3px;
 }
 
+.composer-quotes {
+  display: grid;
+  gap: 4px;
+  max-height: 8rem;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+}
+
+.composer-quote {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--ds-bg-hover);
+  color: var(--ds-text-secondary);
+}
+
+.composer-quote q {
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .composer-input-wrap {
   position: relative;
   display: flex;

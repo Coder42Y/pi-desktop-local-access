@@ -5,8 +5,10 @@ import type {
   FsChatRefMatchKind,
   FsChatRefProjectRoot,
   FsChatRefRoot,
+  FsChatRefResolveResult,
 } from "@pi-desktop/shared";
 import { isAttachmentBlobRef, isIgnoredName, resolveRealPathWithinRoot } from "./workspace-files.js";
+import { resolveExternalFile } from "./external-files.js";
 import { getWorkspaceFileIndex } from "./fs-index.js";
 
 /**
@@ -28,7 +30,9 @@ import { getWorkspaceFileIndex } from "./fs-index.js";
  *      searched to exhaustion before the scratch store is considered;
  *   4. inside one root an exact path wins; a shorthand resolves only when the
  *      complete supplied suffix matches one safe file. Ambiguous or shortened
- *      suffixes remain unresolved.
+ *      suffixes remain unresolved. An exact reference may additionally name a
+ *      real directory when the caller passes `allowDirectory` (issue #2113);
+ *      a shorthand never resolves to a directory.
  */
 
 export type ChatRefRoots = {
@@ -187,6 +191,14 @@ async function isRegularFile(target: string): Promise<boolean> {
   }
 }
 
+async function isDirectory(target: string): Promise<boolean> {
+  try {
+    return (await stat(target)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
 /** Root-relative POSIX path, or null when `absolute` is outside `rootPath`. */
 function relativeInside(rootPath: string, absolute: string): string | null {
   const rel = relative(rootPath, absolute);
@@ -244,6 +256,33 @@ export async function isChatRefOutsideRoots(ref: string, roots: ChatRefRoots): P
   );
 }
 
+/**
+ * Complete an absolute reference that `isChatRefOutsideRoots` placed outside
+ * every managed root (upstream ADR 0339). It names that exact file or nothing: a path
+ * with no regular file behind it reports a miss, and no same-name file is ever
+ * looked up anywhere else. A reference that is not an exact absolute path keeps
+ * reporting the access limit, since shorthand never searches outside the roots.
+ */
+export async function resolveExternalChatRef(ref: string): Promise<FsChatRefResolveResult> {
+  const parsed = parseChatRef(ref);
+  const cleaned = cleanRef(ref);
+  if (!parsed?.absolute || !isAbsolute(cleaned)) {
+    return { match: null, reason: "outside-allowed-roots" };
+  }
+  const external = await resolveExternalFile(cleaned);
+  if (external.kind === "file") {
+    return {
+      match: {
+        root: "external",
+        relativePath: basename(external.path),
+        absolutePath: external.path,
+        matchedBy: "exact-absolute",
+      },
+    };
+  }
+  return { match: null };
+}
+
 function segmentsOf(path: string): string[] {
   return toPosix(path).split("/").filter(Boolean);
 }
@@ -275,6 +314,12 @@ function fuzzyCandidates(
 async function isContainedRegularFile(root: string, relativePath: string): Promise<boolean> {
   const realPath = await resolveRealPathWithinRoot(root, relativePath);
   return realPath !== null && isRegularFile(realPath);
+}
+
+/** Return the verified directory path that the project tree can address. */
+async function containedDirectoryPath(root: string, relativePath: string): Promise<string | null> {
+  const realPath = await resolveRealPathWithinRoot(root, relativePath);
+  return realPath && await isDirectory(realPath) ? realPath : null;
 }
 
 async function hasInvalidLinkAncestor(root: string, segments: readonly string[]): Promise<boolean> {
@@ -342,10 +387,24 @@ async function listRootFiles(
 /**
  * Resolve one chat file reference to the best existing file, or null when
  * nothing matches. Never throws: an unreadable root is simply not a match.
+ * With `allowDirectory` an exact reference may name a real directory inside
+ * the roots instead; the match then carries `target: "directory"`.
  */
+export type ChatRefResolveOptions = {
+  /**
+   * Let an exact reference name a real directory (issue #2113). Explicit
+   * Markdown links carry this flag; shorthand and fuzzy completion never do,
+   * so a directory named like the file a shorthand asks for keeps answering
+   * nothing. The absolute branch still stays inside the managed roots — an
+   * exact absolute path outside them keeps the upstream ADR 0339 file-only contract.
+   */
+  allowDirectory?: boolean;
+};
+
 export async function resolveChatFileRef(
   ref: string,
   roots: ChatRefRoots,
+  options: ChatRefResolveOptions = {},
 ): Promise<FsChatRefMatch | null> {
   const parsed = parseChatRef(ref);
   if (!parsed) return null;
@@ -373,15 +432,22 @@ export async function resolveChatFileRef(
     } catch {
       return null;
     }
-    if (!(await isRegularFile(targetPath))) return null;
+    const regular = await isRegularFile(targetPath);
+    if (!regular) {
+      // An exact absolute directory inside a managed root resolves only when
+      // the caller asked for directories (issue #2113); realpath has already
+      // collapsed any link, so the root attribution below cannot escape.
+      if (!options.allowDirectory || !(await isDirectory(targetPath))) return null;
+    }
     for (const root of canonicalRootList) {
       const relativePath = root.realPath ? relativeInside(root.realPath, targetPath) : null;
       if (!relativePath) continue;
       return {
         root: root.kind,
         relativePath,
-        absolutePath,
+        absolutePath: regular ? absolutePath : join(root.path, relativePath),
         matchedBy: "exact-absolute",
+        ...(regular ? {} : { target: "directory" as const }),
         ...(root.sessionScratch ? { sessionScratch: true } : {}),
         ...(root.projectRoot ? { projectRoot: root.projectRoot } : {}),
       };
@@ -429,6 +495,25 @@ export async function resolveChatFileRef(
         ...(root.sessionScratch ? { sessionScratch: true } : {}),
         ...(root.projectRoot ? { projectRoot: root.projectRoot } : {}),
       };
+    }
+    // Resolve directory aliases to the real tree location. The file manager
+    // lists a symlink as a link, so the alias itself cannot be expanded.
+    if (options.allowDirectory) {
+      const realPath = await containedDirectoryPath(root.path, parsed.segments.join("/"));
+      if (realPath) {
+        const [canonicalRoot] = await canonicalRoots([root]);
+        const relativePath = canonicalRoot.realPath ? relativeInside(canonicalRoot.realPath, realPath) : null;
+        if (!relativePath) return null;
+        return {
+          root: root.kind,
+          relativePath,
+          absolutePath: join(root.path, relativePath),
+          matchedBy: "exact-relative",
+          target: "directory",
+          ...(root.sessionScratch ? { sessionScratch: true } : {}),
+          ...(root.projectRoot ? { projectRoot: root.projectRoot } : {}),
+        };
+      }
     }
     if (await hasInvalidLinkAncestor(root.path, parsed.segments)) return null;
     const candidates = fuzzyCandidates(

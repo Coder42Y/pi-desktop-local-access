@@ -112,6 +112,7 @@
     "test:e2e:headless-collaboration": "node scripts/e2e-headless-session-collaboration.mjs",
     "test:e2e:external-filesystem": "node scripts/e2e-external-filesystem.mjs",
     "test:e2e:session-completion": "node scripts/e2e-session-completion.mjs",
+    "test:e2e:file-manager-directory": "node --test apps/desktop/test/file-manager-directory-location-user-path.e2e.mjs",
     "test:e2e:ssh-external-preview": "node scripts/e2e-ssh-external-preview.mjs",
     "test:e2e:remote-host": "node scripts/e2e-remote-host.mjs",
     "test:e2e:remote-file-manager": "node scripts/e2e-remote-file-manager.mjs",

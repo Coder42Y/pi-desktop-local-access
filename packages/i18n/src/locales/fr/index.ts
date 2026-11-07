@@ -414,6 +414,8 @@ export const fr = {
     "messageMenu": "Actions du message",
     "conversationMenu": "Actions de la conversation",
     "selectMessageText": "Sélectionner le texte du message",
+    quoteInComposer: "Citer dans le champ de saisie",
+    removeComposerQuote: "Supprimer la citation",
     "copyConversation": "Copier la conversation",
     "copyLastAnswer": "Copier la dernière réponse",
     "radialMenuOpenBrowser": "Ouvrir le navigateur",

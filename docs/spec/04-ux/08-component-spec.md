@@ -1960,8 +1960,11 @@ Single message render — either user (plaintext) or assistant (markdown streami
   and chrome buttons are otherwise unselectable.
 - Assistant: transparent surface, left-aligned, markdown rendered at full
   content width. Workspace file paths in that markdown are previewable:
-  inline code, markdown links, and bare path tokens (with a known
-  extension) complete and open like a chip against every folder of the open
+  inline code, markdown links, and path-like prose tokens complete and open
+  like a chip. An extensionless path can be recognized from its directory
+  and filename. Filenames may use unlisted suffixes or start with a dot. Use `@name` or `@"name"` to
+  name a single extensionless file or to preserve spaces and punctuation.
+  Relative file references resolve against every folder of the open
   project (ADR 0263): the resolved file in the bundled
   `pi.file-manager` view (the host `file:` tab without it), a `.html`/`.htm`
   page of the primary folder in the side browser, and nothing plus a report when
@@ -3398,6 +3401,22 @@ reasoning-level control.
   `--ds-bg-composer` with `--ds-shadow-composer` like queued prompt rows rather
   than the in-flow `--ds-tile` wash.
 
+#### Quote selected model text (fork NEXT-003)
+
+- Selecting text within a model reply and choosing **Quote in composer** from
+  the reply's context menu adds the excerpt to the current conversation's draft.
+  The quote is a separate, removable passage above the editable text, with
+  quotation marks and a subdued background. Existing text and attachments
+  stay in the draft.
+- Quoting and removing a quote do not send. An explicit submission sends each
+  excerpt as a Markdown blockquote after the user's request, separated by a
+  blank line. A draft containing a quote uses prompt submission even when the
+  request begins with a slash. Skill tokens and session links inside quoted
+  passages stay literal.
+- Quotes follow the existing per-conversation in-memory draft lifetime and
+  restore with an unsuccessful send. Accepted prompt history can recall them
+  as separate passages. Quote text does not get an instruction role.
+
 ### 11.6 Accessibility
 
 - `role="textbox"` with `aria-label="Message input"`
@@ -3739,9 +3758,18 @@ Anatomy:
   full path and Copy relative path on every surface that names it. Unpositioned
   `.html` and `.htm` references also offer an **Open with** submenu containing
   File Manager, built-in browser, and default browser. Each choice completes the
-  reference first and opens that exact resolved file. Other file types keep the
-  copy actions only; the transcript menu has no **Show in folder** action. A
-  file outside the project has no relative path to copy and reports that fact.
+  reference first and opens that exact resolved file. Local file references
+  also offer **Show in folder**. An explicit local Markdown link may open an
+  existing absolute file without an extension, including through a local
+  `file://` URL. Absolute links resolve exactly, and a missing destination
+  reports an error. A project-external file opens
+  in the host preview and has no relative path to copy. External local images
+  require an explicit open, and an inline image reference cannot load them.
+  An explicit link to a directory within the project selects and expands it
+  in the bundled file manager. Directory links accept trailing separators and
+  in-project directory aliases expand the verified target in the tree.
+  Shorthand lookup still resolves files only.
+  SSH links keep the owner-only remote side-panel preview.
   The OS default application is no longer what this click does. HTTP(S)
   URLs stay text links. Plain clicks follow the Link open destination setting,
   and right-clicking a URL exposes the same external, work-panel, and copy

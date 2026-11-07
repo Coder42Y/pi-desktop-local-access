@@ -10,6 +10,11 @@
   [04-ux/09-interaction-patterns.md](../spec/04-ux/09-interaction-patterns.md) ·
   [06-delivery/04-e2e-test-plan.md](../spec/06-delivery/04-e2e-test-plan.md)
 
+> Fork amendment (NEXT-003): the [Composer spec](../spec/04-ux/08-component-spec.md#quote-selected-model-text-fork-next-003)
+> defines an independently removable quote from a model reply's context menu.
+> This amends the removal of quote prefill in decision 2 for the fork. The
+> historical selection toolbar, annotation, and side-chat decisions stand.
+
 ## Context
 
 Three renderer-owned surfaces grew around the transcript and the composer. ADR

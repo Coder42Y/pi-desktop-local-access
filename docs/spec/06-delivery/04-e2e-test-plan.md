@@ -19526,21 +19526,30 @@ their separate platform acceptance.
   project; a readable `.eml` and PNG in a separate directory; a remote session.
 - **Steps**: Resolve an absolute external email reference, preview its contents,
   open it with the OS and reveal it in Finder. Repeat without a project, with
-  spaces, line suffixes and a symlink. Preview the external image. Try a missing
-  file, a directory and a shorthand naming only the external email. Repeat the
-  absolute requests from a remote session.
+  spaces, line suffixes, a symlink and an extensionless local `file://` link.
+  Click an extensionless absolute path written directly in the reply.
+  Click a missing absolute link that has an existing project suffix match.
+  Open an in-project directory alias with a trailing separator. Render
+  an inline reference to the external image, then open it explicitly. Click
+  exact project-directory links. Try a missing file, an external directory and
+  a shorthand naming only the external email. Repeat the absolute requests
+  from a remote session.
 - **Expected**: Local exact references resolve; external files stay absolute in
   the host preview instead of a project-scoped plugin. Existing size/type and
-  OS restrictions still apply. Missing files/directories cannot open as files;
-  disk roots are never searched by shorthand. Project-before-scratch priority
-  remains. Shared guards without an explicit disk root still reject external
-  files. Remote reads/resolution route remotely; remote OS open/reveal remain
+  OS restrictions still apply. Inline image loading rejects an external
+  realpath, while an explicit open previews the same image. Exact project
+  directories browse in File Manager, with an in-project alias expanding
+  its verified target. Missing absolute links do not open a suffix match,
+  and external directories do not open. Shorthand preserves project-before-scratch priority and does
+  not search external locations. Remote reads/resolution route remotely; remote OS open/reveal remain
   rejected. Plugin and AI tool permissions are unchanged.
 - **Automation**: `node --test apps/desktop/test/local-file-access.test.mjs`
   exercises real Electron IPC handlers and the renderer opening hook with real
   temporary files; native shell, Host persistence, React state and remote
-  transport are stubbed. This is behavioral integration coverage, not a native
-  window or packaged-application E2E run.
+  transport are stubbed. `node scripts/e2e-chat-html-artifacts.mjs` covers
+  external Markdown links in Desktop. `pnpm test:e2e:file-manager-directory`
+  covers browsing directory locations in the real bundled plugin. See
+  E2E-SSH-external-file-preview for the remote journey.
 - **Native acceptance**: After installing the custom package, click an external
   `.eml` link and check the host preview, then use OS open/reveal. This remains
   pending until a package is built and installed.
@@ -19799,3 +19808,17 @@ their separate platform acceptance.
   Existing Windows child/grandchild cleanup tests remain required; record native
   failures separately from protocol success.
 - Exercise a late stop with an already reaped child before the supervisor drains the pipes. Verify the original exit outcome, final output and stable elapsed time across reads. Stall capability discovery or the first Host observation to exercise the overall wait deadline. The Electron transcript fixture renders a pending Bash stop and a mixed job list.
+
+### E2E-CHAT-composer-reply-excerpt
+
+- Start with an existing question in the composer. Select part of a model
+  reply, including linked text, and choose **Quote in composer**. Verify the
+  passage appears separately and the question is unchanged. An empty selection
+  offers no quote action and keeps the normal link menu.
+- Switch conversations and return. Remove the quote, verify the question is
+  intact, and add the quote again. Adding and removing it do not submit.
+- Submit, simulate a rejected send, and verify the separate quote and question
+  restore. Submit successfully and verify a Markdown blockquote and question
+  reach the prompt boundary in one message and the draft clears.
+- Run `node scripts/e2e-composer-paste.mjs --quote-only` in an isolated Electron
+  environment. The full composer paste suite also executes this path.
