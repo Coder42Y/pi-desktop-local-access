@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,7 +30,7 @@ const remoteBoot = moduleUrl(`
 const overrides = new Map([
   ["electron", electron],
   ["@pi-desktop/shared", moduleUrl(reexport("../../../packages/shared/src/protocol.ts", "../../../packages/shared/src/errors.ts", "../../../packages/shared/src/fuzzy.ts", "../../../packages/shared/src/activation.ts"))],
-  ["@pi-desktop/host-runtime", moduleUrl(`${reexport("../../../packages/host-runtime/src/workspace-files.ts", "../../../packages/host-runtime/src/chat-ref-resolve.ts", "../../../packages/host-runtime/src/fs-index.ts")}\nexport const collectWorkspaceDiff = () => { throw new Error('Unexpected diff'); };`)],
+  ["@pi-desktop/host-runtime", moduleUrl(`${reexport("../../../packages/host-runtime/src/workspace-files.ts", "../../../packages/host-runtime/src/chat-ref-resolve.ts", "../../../packages/host-runtime/src/external-files.ts", "../../../packages/host-runtime/src/fs-index.ts")}\nexport const collectWorkspaceDiff = () => { throw new Error('Unexpected diff'); };`)],
   ["@pi-desktop/agent-runtime", stub("loadComposerTemplates")],
   ["../bootstrap/remote-hosts", remoteBoot],
   ["../git-clone", stub("cloneGitRepository")],
@@ -61,7 +61,7 @@ const { calls: remoteCalls } = await import(remoteBoot);
 const { readOpenableFile } = await import("../../../packages/host-runtime/src/workspace-files.ts");
 
 async function fixture(t, { remote = false, home = false } = {}) {
-  const base = await mkdtemp(join(process.env.PI_SCRATCH_DIR || tmpdir(), "pi-local-file-access-"));
+  const base = await realpath(await mkdtemp(join(process.env.PI_SCRATCH_DIR || tmpdir(), "pi-local-file-access-")));
   t.after(() => rm(base, { recursive: true, force: true }));
   const workspace = join(base, "project");
   const desktop = join(base, "Desktop", "secmanus-smoke");
@@ -98,6 +98,7 @@ test("local IPC resolves and previews an absolute email outside the project", as
   const result = await invoke("fsResolveRef", { ref: mail });
   assert.equal(result.match?.absolutePath, mail);
   assert.equal(result.match.matchedBy, "exact-absolute");
+  assert.equal(result.match.root, "external");
   const preview = await invoke("fsRead", { path: mail });
   assert.equal(preview.kind, "text");
   assert.match(preview.content, /Subject: test fixture/);
@@ -120,29 +121,40 @@ test("external paths with spaces, line suffixes and symlinks resolve exactly", a
   assert.equal((await invoke("fsResolveRef", { ref: `${mail}:2` })).match?.absolutePath, mail);
   const link = join(desktop, "mail-link.eml");
   await symlink(mail, link);
-  assert.equal((await invoke("fsResolveRef", { ref: link })).match?.absolutePath, link);
+  assert.equal((await invoke("fsResolveRef", { ref: link })).match?.absolutePath, await realpath(mail));
   assert.equal((await invoke("fsRead", { path: link })).kind, "text");
 });
 
-test("external images use the existing bounded image reader", async (t) => {
-  const { invoke, desktop } = await fixture(t);
+test("local external images require explicit preview even through an in-project link", async (t) => {
+  const { invoke, desktop, workspace } = await fixture(t);
   const image = join(desktop, "pixel.png");
   await writeFile(image, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
-  const result = await invoke("fsReadImageDataUrl", { ref: image });
-  assert.equal(result.kind, "image");
-  assert.match(result.dataUrl, /^data:image\/png;base64,/);
+  const local = join(workspace, "local.png");
+  const linked = join(workspace, "linked.png");
+  await writeFile(local, await readFile(image));
+  await symlink(image, linked);
+  assert.equal((await invoke("fsReadImageDataUrl", { ref: local })).kind, "image");
+  for (const ref of [image, linked]) {
+    assert.deepEqual(await invoke("fsReadImageDataUrl", { ref }), {
+      kind: "missing",
+      errorCode: "PATH_OUTSIDE_ALLOWED_ROOT",
+    });
+    const result = await invoke("fsRead", { path: ref });
+    assert.equal(result.kind, "image");
+    assert.match(result.dataUrl, /^data:image\/png;base64,/);
+  }
 });
 
 test("missing external files and directories are not resolved or opened", async (t) => {
   const { invoke, desktop } = await fixture(t);
   assert.equal((await invoke("fsResolveRef", { ref: join(desktop, "missing.eml") })).match, null);
-  assert.equal((await invoke("fsResolveRef", { ref: desktop })).match, null);
-  await assert.rejects(invoke("fsRead", { path: desktop }), /not a file/);
-  await assert.rejects(invoke("fsOpen", { path: desktop }), /not a file/);
+  assert.equal((await invoke("fsResolveRef", { ref: desktop, allowDirectory: true })).match, null);
+  await assert.rejects(invoke("fsRead", { path: desktop }), /outside allowed roots/);
+  await assert.rejects(invoke("fsOpen", { path: desktop }), /not openable/);
   await assert.rejects(invoke("fsOpen", { path: join(desktop, "missing.eml") }));
 });
 
-test("disk roots never participate in shorthand search or change shared guards", async (t) => {
+test("external directories never participate in shorthand search or change shared guards", async (t) => {
   const { invoke, mail, workspace, scratch } = await fixture(t);
   assert.equal((await invoke("fsResolveRef", { ref: "paypal-lookalike.eml" })).match, null);
   const note = join(workspace, "note.md");
@@ -157,7 +169,7 @@ test("remote sessions still route reads and references remotely and refuse local
   for (const [name, input, operation] of [
     ["fsRead", { path: mail }, "read"],
     ["fsReadImageDataUrl", { ref: mail }, "image"],
-    ["fsResolveRef", { ref: mail }, "resolve"],
+    ["fsResolveRef", { ref: mail, allowDirectory: true }, "resolve"],
   ]) {
     assert.deepEqual(await invoke(name, input), { remote: true });
     assert.deepEqual(remoteCalls.at(-1), ["test-ssh", { path: "/remote/project", operation, ref: mail }]);
@@ -166,7 +178,7 @@ test("remote sessions still route reads and references remotely and refuse local
   await assert.rejects(invoke("fsReveal", { path: mail }), /remote paths cannot be revealed/);
 });
 
-test("the renderer previews external IPC matches by absolute path outside project plugins", { timeout: 5000 }, async (t) => {
+test("the renderer sends external files to host preview and project directories to File Manager", { timeout: 5000 }, async (t) => {
   const { invoke, mail, workspace } = await fixture(t);
   const store = moduleUrl(`
     export const state = { sessions: [], workspace: null, activeSessionId: 'session', showToast: () => {} };
@@ -183,7 +195,7 @@ test("the renderer previews external IPC matches by absolute path outside projec
   const { state } = await import(store);
   state.workspace = { path: workspace };
   const { api } = await import(bridge);
-  api.fsResolveRef = (ref) => invoke("fsResolveRef", { ref });
+  api.fsResolveRef = (ref, sessionId, options) => invoke("fsResolveRef", { ref, sessionId, ...options });
   api.listPluginViews = async () => [{ pluginId: "pi.file-manager", viewId: "manager" }];
   const destination = new Promise((resolve) => {
     state.openFileInWorkPanel = (path) => resolve({ kind: "host", path });
@@ -192,4 +204,12 @@ test("the renderer previews external IPC matches by absolute path outside projec
   const { useOpenChatFileRef } = await import("../src/hooks/use-preview-target.ts");
   useOpenChatFileRef()(mail);
   assert.deepEqual(await destination, { kind: "host", path: mail });
+
+  await mkdir(join(workspace, "examples"));
+  const directory = new Promise((resolve) => {
+    state.openWorkPanelTab = resolve;
+  });
+  const { fileManagerPluginTab } = await import("../src/lib/work-panel-tabs.ts");
+  useOpenChatFileRef()("examples", undefined, undefined, { allowDirectory: true });
+  assert.deepEqual(await directory, fileManagerPluginTab("examples"));
 });

@@ -2,7 +2,7 @@
 // Real transcript clicks, Rust storage, preload IPC and native HTML guests.
 // Only the loopback model fixture receives requests; all session data is synthetic.
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -23,7 +23,7 @@ const binary = resolveHostBinary();
 const host = new Host(binary, data, { quiet: true });
 const model = await startHtmlPreviewModel();
 const cases = [];
-let outside;
+let outside, outsideNote, outsideDotfile, outsideBare, outsideBareDotfile;
 const html = '<!doctype html><meta charset="utf-8"><title>Pelican animation</title><style>body{background:#f5f5f5;color:#222;font:20px system-ui;padding:28px}svg{width:240px}circle{animation:ride 2s infinite alternate}@keyframes ride{to{transform:translateX(80px)}}</style><h1>Pelican bicycle animation</h1><svg viewBox="0 0 240 80"><circle cx="40" cy="40" r="24" fill="#222"/></svg><p id="result">Ready</p><button onclick="document.querySelector(\'#result\').textContent=\'Animation opened\'">Run animation</button>';
 try {
   await host.start();
@@ -82,8 +82,31 @@ try {
   } });
   outside = join(output, "outside.html");
   await writeFile(outside, html);
+  // upstream ADR 0339: an exact absolute path outside every managed root opens the file
+  // the user clicked, dotfile folders included.
+  await mkdir(join(output, "outside notes"), { recursive: true });
+  outsideNote = join(output, "outside notes", "考核 notes.txt");
+  await writeFile(outsideNote, "External note body\n");
+  await mkdir(join(output, ".ssh"), { recursive: true });
+  outsideDotfile = join(output, ".ssh", "notes.txt");
+  await writeFile(outsideDotfile, "Host fixture\n");
+  // Extensionless files are still explicit link destinations.
+  outsideBare = join(output, "outside notes", "build-log");
+  await writeFile(outsideBare, "Bare file body\n");
+  outsideBareDotfile = join(output, ".ssh", "config");
+  await writeFile(outsideBareDotfile, "Bare dotfile body\n");
+  const outsideRunner = join(output, "runner");
+  await writeFile(outsideRunner, "Extensionless path body");
+  const outsideImage = join(output, "outside.png");
+  await writeFile(outsideImage, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=", "base64"));
   for (const [label, content] of [
+    ["Outside image", "![Outside image](<" + outsideImage.replaceAll("\\", "/") + ">)"],
     ["Outside HTML", "[Outside HTML](<" + outside.replaceAll("\\", "/") + ">)"],
+    ["Outside note", "[Outside note](<" + outsideNote.replaceAll("\\", "/") + ">)"],
+    ["Outside dotfile", "[Outside dotfile](<" + outsideDotfile.replaceAll("\\", "/") + ">)"],
+    ["Outside bare", "[Outside bare](<" + pathToFileURL(outsideBare).href + ">)"],
+    ["Outside bare dotfile", "[Outside bare dotfile](<" + outsideBareDotfile.replaceAll("\\", "/") + ">)"],
+    ["Outside runner", outsideRunner.replaceAll("\\", "/")],
     ["Source line", "Source: Ordinary-scratch.html:1"],
   ]) {
     for (const [role, text] of [["user", "Inspect " + label], ["assistant", content]]) {
@@ -91,6 +114,21 @@ try {
         id: randomUUID(), role, content: text, status: "complete", createdAt: new Date().toISOString(),
       } });
     }
+  }
+  const directory = join(primary, "examples");
+  await mkdir(directory);
+  await writeFile(join(directory, "child.txt"), "Directory fixture");
+  const alias = join(primary, "examples-alias");
+  await symlink(directory, alias, process.platform === "win32" ? "junction" : "dir");
+  const competingDir = join(primary, "other", "bin");
+  await mkdir(competingDir, { recursive: true });
+  await writeFile(join(competingDir, "tool"), "Wrong suffix match");
+  const missing = join(primary, "bin", "tool").replaceAll("\\", "/");
+  for (const [role, content] of [["user", "Browse the examples and check the tool"],
+    ["assistant", "[Open examples](examples-alias/)\n\n[Missing absolute tool](<" + missing + ">)"]]) {
+    await host.call("session.appendMessage", { sessionId: project.id, message: {
+      id: randomUUID(), role, content, status: "complete", createdAt: new Date().toISOString(),
+    } });
   }
   for (const [role, content] of [["user", "Inspect isolated HTML source"],
     ["assistant", "Source: Isolated-worktree.html:1"]]) {
@@ -168,13 +206,34 @@ try {
   await page.getByRole("link", { name: "Missing HTML", exact: true }).click();
   await page.getByText("No file matches missing.html", { exact: true }).waitFor();
   results.push("missing file reports its failure");
-  await page.getByRole("link", { name: "Outside HTML", exact: true }).click();
-  await page.getByText(/is outside the locations this app can access/).waitFor();
-  assert.equal(await app.evaluate(({ webContents }, url) =>
-    webContents.getAllWebContents().some(wc => wc.getURL() === url), pathToFileURL(outside).href), false);
-  results.push("outside HTML is rejected without guest navigation");
   for (const dismiss of await page.locator(".toast-dismiss").all()) await dismiss.click();
   await page.locator(".toast").first().waitFor({ state: "hidden" });
+  await page.getByRole("link", { name: "Outside HTML", exact: true }).click();
+  await page.locator(".file-viewer").getByText(/Pelican bicycle animation/).waitFor();
+  assert.equal(await app.evaluate(({ webContents }, url) =>
+    webContents.getAllWebContents().some(wc => wc.getURL() === url), pathToFileURL(outside).href), false);
+  results.push("outside HTML opens its source without guest navigation");
+  await page.getByRole("link", { name: "Outside note", exact: true }).click();
+  await page.locator(".file-viewer").getByText("External note body").waitFor();
+  results.push("outside absolute file opens in the file viewer");
+  await page.getByRole("link", { name: "Outside dotfile", exact: true }).click();
+  await page.locator(".file-viewer").getByText("Host fixture").waitFor();
+  results.push("outside dotfile folder opens in the file viewer");
+  await page.getByRole("link", { name: "Outside bare", exact: true }).click();
+  await page.locator(".file-viewer").getByText("Bare file body").waitFor();
+  results.push("outside extensionless file opens in the file viewer");
+  await page.getByRole("link", { name: "Outside bare dotfile", exact: true }).click();
+  await page.locator(".file-viewer").getByText("Bare dotfile body").waitFor();
+  results.push("outside extensionless dotfile opens in the file viewer");
+  await page.getByRole("link", { name: join(output, "runner").replaceAll("\\", "/"), exact: true }).click();
+  await page.locator(".file-viewer").getByText("Extensionless path body").waitFor();
+  results.push("extensionless absolute path in prose opens in the file viewer");
+  const outsideImageChip = page.getByRole("button", { name: "Outside image", exact: true });
+  await outsideImageChip.waitFor();
+  assert.equal(await page.locator("img.chat-image-local[alt='Outside image']").count(), 0);
+  await outsideImageChip.click();
+  await page.locator(".file-viewer-image img").waitFor();
+  results.push("outside image previews only after clicking its chat chip");
   await page.getByText("Ordinary-scratch.html:1", { exact: true }).click();
   await page.locator(".file-viewer").waitFor();
   results.push("positioned HTML opens source, not execution");
@@ -183,6 +242,34 @@ try {
   await page.locator(".file-viewer").waitFor();
   await page.locator(".file-viewer").getByText(/Pelican bicycle animation/).waitFor();
   results.push("isolated HTML source reads the session worktree");
+  await page.evaluate(id => window.__PI_DESKTOP__.selectSession(id), cases[1].sessionId);
+  await page.getByRole("link", { name: "Missing absolute tool", exact: true }).click();
+  await page.getByText("No file matches " + join(primary, "bin", "tool").replaceAll("\\", "/"), { exact: true }).waitFor();
+  results.push("missing absolute path never opens a suffix match");
+  await page.getByRole("link", { name: "Open examples", exact: true }).click();
+  const directoryDeadline = Date.now() + 10_000;
+  let directoryState;
+  do {
+    directoryState = await app.evaluate(async ({ webContents }) => {
+      const guests = webContents.getAllWebContents();
+      const view = guests.find(wc => wc.getURL().includes("pi.file-manager"));
+      if (!view) return { urls: guests.map(wc => wc.getURL()) };
+      return view.executeJavaScript(`(() => {
+        const row = document.querySelector('.tree-row[aria-selected="true"]');
+        return {
+          path: row?.getAttribute("data-path"),
+          expanded: row?.getAttribute("aria-expanded"),
+          alert: document.querySelector('[role="alert"]')?.textContent,
+          url: location.href,
+        };
+      })()`);
+    });
+    if (directoryState.path === "examples" && directoryState.expanded === "true") break;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (Date.now() < directoryDeadline);
+  assert.equal(directoryState.path, "examples", JSON.stringify(directoryState));
+  assert.equal(directoryState.expanded, "true", JSON.stringify(directoryState));
+  results.push("transcript directory alias opens and expands the real project folder");
   // Exercise BrowserPreview through a user send, ToolSearch, sidecar and main.
   // The only fake is the loopback provider, which requests a deterministic tool.
   for (const item of [cases[0], cases[2], cases[5]]) {

@@ -1,5 +1,11 @@
 # Unreleased changes
 
+- Open chat file references with uncommon extensions, dotfiles, and
+  extensionless paths in the side panel, and browse linked project directories
+  in File Manager. Local images outside the
+  project now require an explicit open. Finder reveal and SSH previews remain
+  available for their existing file routes.
+
 - Preserve the initiating conversation's filesystem authorization throughout
   native deliveries, including queued/forwarded work and completion callbacks.
   Headless Hosts now execute and settle native messaging through the shared
