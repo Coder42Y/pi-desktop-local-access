@@ -19526,21 +19526,30 @@ their separate platform acceptance.
   project; a readable `.eml` and PNG in a separate directory; a remote session.
 - **Steps**: Resolve an absolute external email reference, preview its contents,
   open it with the OS and reveal it in Finder. Repeat without a project, with
-  spaces, line suffixes and a symlink. Preview the external image. Try a missing
-  file, a directory and a shorthand naming only the external email. Repeat the
-  absolute requests from a remote session.
+  spaces, line suffixes, a symlink and an extensionless local `file://` link.
+  Click an extensionless absolute path written directly in the reply.
+  Click a missing absolute link that has an existing project suffix match.
+  Open an in-project directory alias with a trailing separator. Render
+  an inline reference to the external image, then open it explicitly. Click
+  exact project-directory links. Try a missing file, an external directory and
+  a shorthand naming only the external email. Repeat the absolute requests
+  from a remote session.
 - **Expected**: Local exact references resolve; external files stay absolute in
   the host preview instead of a project-scoped plugin. Existing size/type and
-  OS restrictions still apply. Missing files/directories cannot open as files;
-  disk roots are never searched by shorthand. Project-before-scratch priority
-  remains. Shared guards without an explicit disk root still reject external
-  files. Remote reads/resolution route remotely; remote OS open/reveal remain
+  OS restrictions still apply. Inline image loading rejects an external
+  realpath, while an explicit open previews the same image. Exact project
+  directories browse in File Manager, with an in-project alias expanding
+  its verified target. Missing absolute links do not open a suffix match,
+  and external directories do not open. Shorthand preserves project-before-scratch priority and does
+  not search external locations. Remote reads/resolution route remotely; remote OS open/reveal remain
   rejected. Plugin and AI tool permissions are unchanged.
 - **Automation**: `node --test apps/desktop/test/local-file-access.test.mjs`
   exercises real Electron IPC handlers and the renderer opening hook with real
   temporary files; native shell, Host persistence, React state and remote
-  transport are stubbed. This is behavioral integration coverage, not a native
-  window or packaged-application E2E run.
+  transport are stubbed. `node scripts/e2e-chat-html-artifacts.mjs` covers
+  external Markdown links in Desktop. `pnpm test:e2e:file-manager-directory`
+  covers browsing directory locations in the real bundled plugin. See
+  E2E-SSH-external-file-preview for the remote journey.
 - **Native acceptance**: After installing the custom package, click an external
   `.eml` link and check the host preview, then use OS open/reveal. This remains
   pending until a package is built and installed.

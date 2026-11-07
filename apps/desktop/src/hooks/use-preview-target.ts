@@ -39,6 +39,7 @@ export function useOpenPreviewTarget() {
         return openFileRef(target.path, undefined, undefined, {
           line: target.line,
           column: target.column,
+          allowDirectory: true,
         });
       }
       if (!localToolsAllowed) return;
@@ -88,6 +89,7 @@ export type ResolvedChatFileRef = {
   primary: boolean;
   /** Session-owned generated artifacts, rather than imported attachments. */
   scratch: boolean;
+  target?: "file" | "directory";
 };
 
 export type ChatFileOpenDestination =
@@ -100,6 +102,7 @@ export type ChatFileOpenOptions = {
   line?: number;
   column?: number;
   destination?: ChatFileOpenDestination;
+  allowDirectory?: boolean;
 };
 
 /**
@@ -173,6 +176,7 @@ function useResolveChatFileRef() {
     async (
       path: string,
       baseDir?: string,
+      options?: { allowDirectory?: boolean },
     ): Promise<ResolvedChatFileRef | null> => {
       const state = useAppStore.getState();
       const ownerId = paneSessionId || state.activeSessionId;
@@ -188,7 +192,7 @@ function useResolveChatFileRef() {
         : null;
       let result;
       try {
-        result = await api.fsResolveRef(anchored ?? raw, ownerId);
+        result = await api.fsResolveRef(anchored ?? raw, ownerId, options);
       } catch {
         showToast(t("chat.fileRefLookupFailed"), { variant: "error" });
         return null;
@@ -205,9 +209,6 @@ function useResolveChatFileRef() {
         showToast(t(key, { name: raw }), { variant: "error" });
         return null;
       }
-      // Disk containment permits local external files, but does not make them
-      // project files. Keep their absolute address in the host viewer rather
-      // than passing a disk-relative path to the project-scoped Files plugin.
       if (match.root !== "workspace" || (match.matchedBy === "exact-absolute" && !match.projectRoot)) {
         return {
           path: match.absolutePath,
@@ -216,6 +217,7 @@ function useResolveChatFileRef() {
           inProject: false,
           primary: false,
           scratch: match.sessionScratch === true,
+          target: match.target,
         };
       }
       // A project group can hold several folders, and a relative path always
@@ -229,6 +231,7 @@ function useResolveChatFileRef() {
         inProject: true,
         primary,
         scratch: false,
+        target: match.target,
       };
     },
     [paneSessionId, sessionId, showToast, t, workspacePath],
@@ -269,7 +272,7 @@ export function useOpenChatFileRef() {
       const column = options?.column;
       const destination = options?.destination;
       void (async () => {
-        const resolved = await resolveRef(path, baseDir);
+        const resolved = await resolveRef(path, baseDir, options);
         if (!resolved) return;
         const current = useAppStore.getState();
         const remoteFiles = Boolean(current.workspace?.remote)
@@ -293,7 +296,7 @@ export function useOpenChatFileRef() {
           }
           return;
         }
-        if (destination === "file-manager") {
+        if (destination === "file-manager" || (resolved.target === "directory" && !destination)) {
           if (remoteFiles) {
             showToast(t("chat.fileManagerOpenFailed"), { variant: "error" });
             return;

@@ -1921,28 +1921,31 @@ Renderer IPC kept for the Plan-safe preview facade and URL fallback:
   accepted after a realpath check (D334 / ADR 0172), as is an absolute path in
   another folder of the same project group (ADR 0249 §5, ADR 0263). A known
   image extension wins over `mimeType`; extension-less blobs accept only the
-  image MIME allowlist. Traversal, `~`, and other escapes are rejected
-  (`INVALID_ARGUMENT`).
+  image MIME allowlist. An explicit local preview may also read an exact
+  absolute path whose real target is an existing regular file. Relative
+  traversal and `~` remain disallowed outside managed roots.
 - `fs/readImageDataUrl({ref, mimeType?})` → `FsImageDataUrlResult`
-  (`image` with `dataUrl`, or `missing` / `notImage` / `tooLarge`). Same
-  containment as `fs/read`. Never returns non-image bytes. Renderer-only;
-  not a plugin host API.
-- `fs/reveal({path})` → reveal in Finder. Same containment as `fs/read`.
+  (`image` with `dataUrl`, or `missing` / `notImage` / `tooLarge`). For
+  local sessions, automatic inline loading stays within the workspace,
+  project folders, scratch, and attachments after realpath containment.
+  Never returns non-image bytes. Renderer-only.
+- `fs/reveal({path})` → reveal in Finder. Accepts managed paths and exact
+  absolute local paths to existing regular files.
 - `fs/open({path, mimeType?})` → open an existing regular file with the OS
-  default application. It uses the same realpath containment as `fs/read`,
-  including rejection of symlink escapes. For a content-addressed
+  default application. It accepts the same managed and exact absolute local
+  file paths as `fs/read`. For a content-addressed
   `attachments/<sha256>` blob declared as `video/mp4`, the host creates a
   `.mp4` symlink inside its private app-data directory before the OS handoff,
   so the extensionless blob has a media association without copying its bytes.
-- `fs/resolveRef({ref, sessionId?})` → `FsChatRefResolveResult`
+- `fs/resolveRef({ref, sessionId?, allowDirectory?})` → `FsChatRefResolveResult`
   (for isolated sessions, lookup and file reads use `worktree.location` rather
   than the parent project checkout; an absolute reference under the parent
   checkout is rebased onto the same relative path in the worktree when that
   file exists, so the branch copy opens instead of reporting
   `outside-allowed-roots`)
   (`{ match: FsChatRefMatch | null, reason?: "outside-allowed-roots" }`, the match naming the answering `root`
-  (`workspace` / `scratch` / `attachments`), the `relativePath` relative to that
-  root, optional `sessionScratch: true` for the current session's own scratch
+  (`workspace` / `scratch` / `attachments` / `external`), the `relativePath` relative to that
+  root (the leaf name for `external`), optional `sessionScratch: true` for the current session's own scratch
   (not the wider read-only scratch containment store), the absolute
   `absolutePath`, `matchedBy` (`exact-relative` /
   `exact-absolute` / `path-suffix` / `basename`), and — for a `workspace` match
@@ -1950,8 +1953,7 @@ Renderer IPC kept for the Plan-safe preview facade and URL fallback:
   that answered); `sessionId` selects the
   session whose scratch store is searched. Completes a file reference the agent
   printed in chat, because the renderer cannot see the session's own scratch
-  store: an absolute reference only matches that exact file inside a known
-  root, and an `attachments/<sha256>` blob resolves against the
+  store: an absolute local reference only matches that exact target, and an `attachments/<sha256>` blob resolves against the
   attachment store directly; otherwise the roots are searched in priority order
   — the open project first, the session's own scratch store
   (`<data_dir>/scratch/<sessionId>/`, ADR 0124) second, the attachment store
@@ -1971,10 +1973,16 @@ Renderer IPC kept for the Plan-safe preview facade and URL fallback:
   clicked from whatever conversation is open — and the read guards (`fs/read`,
   `fs/open`, the image reader) already accept it, so such a path completes
   instead of reporting a restriction. A shorthand never completes from that
-  wider store; it still searches the session's own one. A reference that matches
-  nothing returns `match: null`; an absolute path outside every allowed root
-  also returns `reason: "outside-allowed-roots"`, without trying a same-name
-  file inside a root. Resolving never opens anything (ADR 0262).
+  wider store; it still searches the session's own one. When `allowDirectory`
+  is true, an exact local path within a managed root may match with
+  `target: "directory"` and the resolved tree location inside that root,
+  including for an in-root symlink. Shorthand completion stays file-only. Outside the
+  managed roots, an exact absolute local path returns `root: "external"`
+  for an existing regular file and `match: null` otherwise, without a
+  same-name fallback. Resolving never opens anything (ADR 0262).
+- SSH reads, inline previews and reference resolution keep the owner-scoped
+  remote route, with no local fallback on remote failure. Remote paths cannot
+  be opened or revealed by the local OS.
 - `fs/list` stays workspace-only; traversal outside is rejected
   (`INVALID_ARGUMENT`).
 

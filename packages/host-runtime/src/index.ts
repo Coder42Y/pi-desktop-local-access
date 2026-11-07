@@ -12,6 +12,7 @@ export * from "./turn-events.js";
 export * from "./runtime-service.js";
 export * from "./plan-dispatch.js";
 export * from "./workspace-files.js";
+export * from "./external-files.js";
 export * from "./workspace-diff.js";
 export * from "./live-work/operation-ledger.js";
 export * from "./live-work/intent.js";

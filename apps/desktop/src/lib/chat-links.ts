@@ -3,10 +3,9 @@
  * transcript can preview them: HTML in the work-panel browser, other files
  * with the OS default handler, URLs in the embedded browser.
  *
- * File detection is deliberately conservative: a bare token only counts as a
- * file when it carries a known extension, so ordinary dotted identifiers in
- * prose (`store.messages`) stay plain text. Explicit `@path` tokens from the
- * composer (D124 / D320) are accepted even when quoted or absolute.
+ * Unmarked prose needs a path separator or a filename-like suffix. Explicit
+ * `@path` tokens from the composer (D124 / D320) also accept extensionless names
+ * and quoted names with spaces or punctuation.
  *
  * Path tokens recognize Unicode letters and digits, spaces, and Windows drive
  * paths. Absolute candidates stay whole for main-process resolution, which
@@ -28,15 +27,6 @@ import {
   type ChatLinkScanStats,
 } from "./chat-link-scanner.ts";
 import { beginRenderDiagnostic } from "./render-diagnostics.ts";
-
-const KNOWN_EXTS = new Set([
-  "ts", "tsx", "js", "jsx", "mjs", "cjs", "json", "css", "scss", "less",
-  "html", "htm", "md", "mdx", "txt", "rs", "py", "go", "rb", "sh", "zsh",
-  "bash", "yml", "yaml", "toml", "sql", "swift", "kt", "java", "c", "h",
-  "cpp", "hpp", "cs", "php", "vue", "svelte", "xml", "ini", "cfg", "conf",
-  "env", "lock", "svg", "png", "jpg", "jpeg", "gif", "webp", "ico", "pdf",
-  "csv", "tsv", "log",
-]);
 
 const FILE_TOKEN_RE =
   /^(?:(?:[A-Za-z]:[\\/]|~[\\/]|\\\\|\/\/|[\\/])|(?:\.{1,2}[\\/])?)[\p{L}\p{N}_@+. -]+(?:[\\/][\p{L}\p{N}_@+. -]+)*(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?$/u;
@@ -78,18 +68,14 @@ function leafName(path: string): string {
 }
 
 function isLikelyFilePath(path: string): boolean {
-  const normalized = path.replaceAll("\\", "/");
-  const base = normalized.split("/").pop() ?? "";
-  const dotIndex = base.lastIndexOf(".");
-  const ext = dotIndex > 0 ? base.slice(dotIndex + 1).toLowerCase() : "";
-  const baseExt = ext.replace(/[+@-][\p{L}\p{N}_@+-]*$/u, "");
-  if (normalized.includes("/")) {
-    if (baseExt && baseExt.length <= 8) return true;
-    if (KNOWN_BARE_CHAT_FILES.has(base)) return true;
-    return false;
-  }
-  if (KNOWN_BARE_CHAT_FILES.has(base)) return true;
-  return KNOWN_EXTS.has(baseExt);
+  // A single leading slash is also how chat commands are written.
+  const hasParent = /[\\/]/.test(path.replace(/^\/+/, ""));
+  if (hasParent && (isAbsoluteFilePath(path) || !path.includes(" "))) return true;
+  const leaf = leafName(path);
+  if (KNOWN_BARE_CHAT_FILES.has(leaf)) return true;
+  if (/^[^@\s]+@[^@\s.]+\.[^@\s]+$/u.test(path)) return false;
+  const dot = leaf.lastIndexOf(".");
+  return dot >= 0 && dot < leaf.length - 1 && /\p{L}/u.test(leaf);
 }
 
 function isAbsoluteFilePath(path: string): boolean {
@@ -102,9 +88,18 @@ function encodeWindowsPathForHref(path: string): string {
     : path;
 }
 
+function explicitAbsoluteMarkdownTarget(value: string) {
+  const trimmed = value.trim();
+  if (/[\r\n\0]/.test(value) || !isAbsoluteFilePath(trimmed)) return null;
+  const position = parseFileRefPosition(trimmed);
+  const path = position
+    ? stripLineRef(trimmed.replace(/[.,!?;:，。！？；：]+$/u, ""))
+    : trimmed;
+  return { path, ...position };
+}
+
 function normalizeMarkdownFilePath(url: string): string {
-  // Convert file URLs to references before sanitization, never native links.
-  // Main still verifies the resulting path against its allowed roots.
+  // Convert local file URLs before sanitization, never native navigation.
   if (/^file:/i.test(url)) {
     try {
       const file = new URL(url);
@@ -112,20 +107,20 @@ function normalizeMarkdownFilePath(url: string): string {
       if (file.search || file.hash) return url;
       const pathname = decodeURIComponent(file.pathname);
       const path = /^\/[A-Za-z]:\//.test(pathname) ? pathname.slice(1) : pathname;
-      const filePath = parseFileRefPosition(path) ? stripLineRef(path) : path;
-      if (!isAbsoluteFilePath(filePath) || !isLikelyFilePath(filePath)) return url;
-      return encodeURIComponent(path);
+      return explicitAbsoluteMarkdownTarget(path) ? encodeURIComponent(path) : url;
     } catch {
       return url;
     }
   }
-  // Keep a drive letter from being interpreted as a URI scheme by the
-  // renderer and sanitizer; the anchor decodes this back before file lookup.
+  // Encode drive-letter paths before the sanitizer interprets them as URI
+  // schemes. Explicit link destinations can name extensionless files or
+  // directories, including a trailing separator.
   const decoded = safeDecodeUri(url);
-  if (parseFileRef(decoded) && parseFileRefPosition(decoded)) return encodeURIComponent(decoded);
-  if (!/^[A-Za-z]:[\\/]/.test(decoded)) return url;
-  if (!parseFileRef(decoded)) return url;
-  return encodeWindowsPathForHref(decoded);
+  const target = explicitAbsoluteMarkdownTarget(decoded);
+  if (target) {
+    return target.line === undefined ? encodeWindowsPathForHref(decoded) : encodeURIComponent(decoded);
+  }
+  return parseFileRef(decoded) && parseFileRefPosition(decoded) ? encodeURIComponent(decoded) : url;
 }
 
 /**
@@ -135,9 +130,9 @@ function normalizeMarkdownFilePath(url: string): string {
  * `@src/a.ts` previews like `src/a.ts`.
  */
 export function parseFileRef(text: string): string | null {
-  let raw = text.trim();
+  const raw = text.trim();
   if (!raw || raw.length > 512) return null;
-  if (raw.startsWith("@")) raw = raw.slice(1);
+  if (raw.startsWith("@")) return unwrapAtFileRef(raw);
   if (!raw || !FILE_TOKEN_RE.test(raw)) return null;
   const path = stripLineRef(raw);
   return isLikelyFilePath(path) ? path : null;
@@ -151,17 +146,12 @@ export function parseFileRef(text: string): string | null {
 export function unwrapAtFileRef(text: string): string | null {
   const raw = text.trim();
   if (!raw || raw.length > 512) return null;
-  const quoted = raw.match(AT_QUOTED_RE);
-  if (quoted) {
-    const path = stripLineRef(quoted[1]);
-    return path && isLikelyFilePath(path) ? path : null;
-  }
-  const unquoted = raw.match(AT_UNQUOTED_RE);
-  if (unquoted) {
-    const path = stripLineRef(unquoted[1]);
-    return path && isLikelyFilePath(path) ? path : null;
-  }
-  return null;
+  const match = raw.startsWith('@"') ? raw.match(AT_QUOTED_RE) : raw.match(AT_UNQUOTED_RE);
+  const token = match?.[1];
+  if (!token || /[\r\n\0]/.test(token)) return null;
+  const path = stripLineRef(token);
+  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(path) && !isAbsoluteFilePath(path)) return null;
+  return path || null;
 }
 
 /** Parent directory of a workspace-relative (or POSIX) file path. */
@@ -247,7 +237,9 @@ export type ChatPreviewTarget =
 function fileTargetHref(target: Extract<ChatPreviewTarget, { kind: "file" }>): string {
   const position = target.line === undefined ? ""
     : ":" + target.line + (target.column === undefined ? "" : ":" + target.column);
-  return position ? encodeURIComponent(target.path + position) : encodeWindowsPathForHref(target.path);
+  return position || /[#?%]/.test(target.path)
+    ? encodeURIComponent(target.path + position)
+    : encodeWindowsPathForHref(target.path);
 }
 
 /** Resolve one raw chat token into a previewable target, or null. */
@@ -287,19 +279,43 @@ export function handleMarkdownFileLinkClick(
   root: string | null | undefined,
   baseDir: string | undefined,
   openFileRef: (path: string, baseDir?: string, mimeType?: string,
-    position?: { line?: number; column?: number }) => void,
+    options?: { line?: number; column?: number; allowDirectory?: boolean }) => void,
 ): boolean {
-  const decoded = safeDecodeUri(href);
-  const target = resolvePreviewTarget(decoded, root, baseDir);
-  const ref = target?.kind === "file" ? target.path : toWorkspaceRel(decoded, root, baseDir);
-  if (!ref) return false;
+  const target = markdownLinkFileTarget(href, root, baseDir);
+  if (!target) return false;
   event.preventDefault();
-  if (target?.kind === "file" && target.line !== undefined) {
-    openFileRef(ref, baseDir, undefined, { line: target.line, column: target.column });
+  // The link names its target deliberately, so an extension-less directory
+  // destination opens in the file manager instead of missing (issue #2113).
+  if (target.line !== undefined) {
+    openFileRef(target.path, baseDir, undefined, {
+      line: target.line,
+      column: target.column,
+      allowDirectory: true,
+    });
   } else {
-    openFileRef(ref, baseDir);
+    openFileRef(target.path, baseDir, undefined, { allowDirectory: true });
   }
   return true;
+}
+
+/**
+ * The file a local Markdown link destination names, shared by click and the
+ * context menu. A link destination is an explicit reference, so an absolute
+ * path counts even without a file extension (`/etc/hosts`, `.../Makefile`):
+ * the extension heuristic only keeps prose from turning into chips. The main
+ * process still decides whether the file exists and may open (upstream ADR 0339).
+ */
+export function markdownLinkFileTarget(
+  href: string,
+  root: string | null | undefined,
+  baseDir: string | null | undefined,
+): { path: string; line?: number; column?: number } | null {
+  const decoded = safeDecodeUri(href);
+  if (isAbsoluteFilePath(decoded.trim())) return explicitAbsoluteMarkdownTarget(decoded);
+  const target = resolvePreviewTarget(decoded, root, baseDir);
+  if (target?.kind === "file") return target;
+  const rel = toWorkspaceRel(decoded, root, baseDir);
+  return rel ? { path: rel } : null;
 }
 
 /** Tool-call args → preview target (Read/Write/Edit paths, fetch URLs). */

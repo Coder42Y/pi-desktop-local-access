@@ -36,10 +36,12 @@ import {
   listDir,
   readOpenableFile,
   readOpenableImage,
+  readUserOpenableFile,
   resolveRealOpenablePath,
+  resolveUserOpenablePath,
 } from "@pi-desktop/host-runtime";
 import { openableMp4Path } from "../open-attachment-video";
-import { isChatRefOutsideRoots, resolveChatFileRef } from "../chat-ref-resolve";
+import { isChatRefOutsideRoots, resolveChatFileRef, resolveExternalChatRef } from "../chat-ref-resolve";
 import { rebaseWorktreeRef, type WorktreeRefContext } from "../worktree-ref";
 import { getWorkspaceFileIndex, searchWorkspaceFiles } from "../fs-index";
 import {
@@ -833,20 +835,12 @@ export function registerWorkspaceIpc({
     return { entries: await listDir(root, String(input.path ?? "")) };
   });
 
-  // This local build explicitly permits viewing files on every local disk.
-  // Keep these roots out of localFileStores (remote routing) and project roots
-  // (shorthand search), and leave shared/remote/plugin/agent guards unchanged.
-  const localFileRoots = process.platform === "win32"
-    ? Array.from({ length: 26 }, (_, index) => `${String.fromCharCode(65 + index)}:\\`)
-    : ["/"];
-
-  /** Local viewing roots; realpath checks and OS permissions still apply. */
+  /** Managed roots also eligible for automatic inline image reads. */
   const fsExtraRoots = async (workspaceRoot: string | null): Promise<string[]> => {
     const roots = [
       join(dataDir, "scratch"),
       join(dataDir, "attachments"),
       ...projectFolderPaths(workspaceRoot).filter((path) => path !== workspaceRoot),
-      ...localFileRoots,
     ];
     const canonical = await Promise.all(
       roots.map(async (root) => {
@@ -927,7 +921,7 @@ export function registerWorkspaceIpc({
           throw error;
         }
       }
-      return readOpenableFile(
+      return readUserOpenableFile(
         requested,
         workspaceRoot,
         await fsExtraRoots(workspaceRoot),
@@ -968,7 +962,8 @@ export function registerWorkspaceIpc({
         throw error;
       }
     }
-    const target = await resolveRealOpenablePath(
+    const resolvePath = remote ? resolveRealOpenablePath : resolveUserOpenablePath;
+    const target = await resolvePath(
       requested,
       workspaceRoot,
       await fsExtraRoots(workspaceRoot),
@@ -987,7 +982,8 @@ export function registerWorkspaceIpc({
     if (remote && !(await isLocalStoredFile(String(input.path ?? "")))) throw Object.assign(new Error("remote paths cannot be opened on this computer"), { errorCode: ErrorCodes.INVALID_ARGUMENT });
     const workspaceRoot = await optionalWorkspaceRoot(input.sessionId);
     const requested = String(input.path ?? "").trim();
-    const target = await resolveRealOpenablePath(
+    const resolvePath = remote ? resolveRealOpenablePath : resolveUserOpenablePath;
+    const target = await resolvePath(
       requested,
       workspaceRoot,
       await fsExtraRoots(workspaceRoot),
@@ -1036,7 +1032,7 @@ export function registerWorkspaceIpc({
   handle(
     IPC.invoke.fsResolveRef,
     async (
-      input: { ref?: string; sessionId?: string } = {},
+      input: { ref?: string; sessionId?: string; allowDirectory?: boolean } = {},
     ): Promise<FsChatRefResolveResult> => {
       const rawRef = String(input.ref ?? "").trim();
       if (!rawRef) return { match: null };
@@ -1069,14 +1065,13 @@ export function registerWorkspaceIpc({
         // restriction; shorthands still search the session's own store alone.
         containment: [
           { kind: "scratch" as const, path: join(dataDir, "scratch") },
-          ...localFileRoots.map((path) => ({ kind: "workspace" as const, path })),
         ],
         attachments: join(dataDir, "attachments"),
       };
       if (await isChatRefOutsideRoots(ref, roots)) {
-        return { match: null, reason: "outside-allowed-roots" };
+        return remote ? { match: null, reason: "outside-allowed-roots" } : resolveExternalChatRef(ref);
       }
-      return { match: await resolveChatFileRef(ref, roots) };
+      return { match: await resolveChatFileRef(ref, roots, { allowDirectory: !remote && input.allowDirectory === true }) };
     },
   );
 

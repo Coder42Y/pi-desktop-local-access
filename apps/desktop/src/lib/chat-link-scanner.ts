@@ -55,7 +55,7 @@ export type ChatLinkCandidateDispositionResolver = (
 ) => ChatLinkCandidateDisposition;
 
 const PATH_WORD_RE = /^[\p{L}\p{N}_@+./\\-]$/u;
-const TERMINAL_FILE_RE = /\.[A-Za-z0-9]{1,8}(?:[+@-][\p{L}\p{N}_@+-]*)?(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?$/u;
+const TERMINAL_FILE_RE = /\.[A-Za-z0-9]+(?:[+@-][\p{L}\p{N}_@+-]*)?(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?$/u;
 const PROSE_BOUNDARIES = new Set([
   "a", "an", "and", "against", "because", "but", "change", "check",
   "copy", "create", "created", "delete", "edit", "find", "fix", "for",
@@ -495,7 +495,7 @@ export function scanChatLinkCandidates<T>(
       continue;
     }
     const explicitAt = currentCode === 0x40;
-    if (explicitAt) {
+    if (explicitAt && isCandidateBoundary(text, index)) {
       const scanned = scanAtReference(text, index, budget, stats, resolve);
       if (scanned.exhausted) break;
       if (scanned.candidate) candidates.push(scanned.candidate);
@@ -603,7 +603,7 @@ export function scanChatLinkCandidates<T>(
 const PATH_WORD = String.raw`[\p{L}\p{N}_@+.-]+`;
 const PATH_SEGMENT = String.raw`[\p{L}\p{N}_@+. -]+`;
 const PATH_CONTINUATION = String.raw`[\p{L}\p{N}_@+.-]*[\\/]`;
-const FILE_END = String.raw`\.[A-Za-z0-9]{1,8}(?:[+@-][\p{L}\p{N}_@+-]*)?(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?(?![A-Za-z0-9_@+-]|\.[A-Za-z0-9]|${PATH_CONTINUATION})`;
+const FILE_END = String.raw`\.[A-Za-z0-9]+(?:[+@-][\p{L}\p{N}_@+-]*)?(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?(?![A-Za-z0-9_@+-]|\.[A-Za-z0-9]|${PATH_CONTINUATION})`;
 const BARE_FILE_END = String.raw`(?:${[...KNOWN_BARE_CHAT_FILES].join("|")})(?![\p{L}\p{N}_@+.-]|${PATH_CONTINUATION})`;
 const FILE_NAME = String.raw`(?:${PATH_SEGMENT}?${FILE_END}|${BARE_FILE_END})`;
 const UNC_PREFIX = String.raw`(?:\\\\[^\\/\s]+[\\/]|\/\/[^/\s]+\/)`;
@@ -616,7 +616,9 @@ const FILE_SCAN_SOURCE = [
   String.raw`${SPACED_START}(?:\.[A-Za-z0-9_-]+)*${FILE_END}`,
   String.raw`(?:${PATH_WORD}[\\/])+(?:${PATH_SEGMENT}[\\/])*?${FILE_NAME}`,
   String.raw`(?:~[\\/])?\/?\.{1,2}[\\/](?:${PATH_WORD}\/)*${PATH_WORD}(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?`,
-  String.raw`(?:~[\\/])?\/?(?:${PATH_WORD}\/)+${PATH_WORD}(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?`,
-  String.raw`[\p{L}\p{N}_@+-][\p{L}\p{N}_@+.-]*${FILE_END}`,
+  String.raw`(?:[A-Za-z]:[\\/]|\/${PATH_WORD}[\\/])(?:${PATH_WORD}[\\/])*${PATH_WORD}(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?`,
+  String.raw`(?:~[\\/]|\\\\)?(?:${PATH_WORD}[\\/])+${PATH_WORD}(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?`,
+  String.raw`(?:[\p{L}\p{N}_@+-][\p{L}\p{N}_@+.-]*)?${FILE_END}`,
+  String.raw`(?:[\p{L}\p{N}_@+-][\p{L}\p{N}_@+.-]*)?\.[\p{L}\p{N}]+(?::\d+(?::\d+|-\d+)?|#[lL]\d+(?:-[lL]?\d+)?)?(?![\p{L}\p{N}_@+-]|\.[\p{L}\p{N}]|${PATH_CONTINUATION})`,
 ].join("|");
 const FILE_SCAN_RE = new RegExp(FILE_SCAN_SOURCE, "uy");
