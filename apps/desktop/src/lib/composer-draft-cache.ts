@@ -93,6 +93,36 @@ export function sameDraftFileReference(
 const cache = new Map<string, CachedComposerDraft>();
 const revisions = new Map<string, number>();
 let revisionCounter = 0;
+const emptyQuotes: readonly string[] = [];
+const quoteListeners = new Set<() => void>();
+
+export function readComposerQuotes(key: string): readonly string[] {
+  return cache.get(key)?.quotes ?? emptyQuotes;
+}
+
+export function subscribeComposerQuotes(listener: () => void): () => void {
+  quoteListeners.add(listener);
+  return () => { quoteListeners.delete(listener); };
+}
+
+function notifyComposerQuotes(): void {
+  for (const listener of quoteListeners) listener();
+}
+
+export function sameComposerQuotes(left: readonly string[] = emptyQuotes, right: readonly string[] = emptyQuotes): boolean {
+  return left.length === right.length && left.every((quote, index) => quote === right[index]);
+}
+
+export function setComposerQuotes(key: string, quotes: readonly string[] = emptyQuotes): void {
+  if (sameComposerQuotes(readComposerQuotes(key), quotes)) return;
+  const current = cache.get(key) ?? { text: "", fileReferences: [] };
+  markComposerDraftEdited(key);
+  const next: CachedComposerDraft = { ...current };
+  if (quotes.length) next.quotes = [...quotes];
+  else delete next.quotes;
+  cache.set(key, next);
+  notifyComposerQuotes();
+}
 
 export function draftKeyForSession(sessionId: string | null | undefined): string {
   return sessionId ?? HOME_DRAFT_KEY;
@@ -166,12 +196,17 @@ export function captureComposerDraft(
   workspacePath?: string,
 ): CachedComposerDraft {
   const snapshot = snapshotComposerDraft(text, fileReferences, key, workspacePath);
+  const quotes = readComposerQuotes(key);
+  if (quotes.length) snapshot.quotes = [...quotes];
   cache.set(key, snapshot);
   return snapshot;
 }
 
 export function deleteComposerDraft(key: string): void {
+  if (!cache.has(key)) return;
+  const hadQuotes = Boolean(cache.get(key)?.quotes?.length);
   cache.delete(key);
+  if (hadQuotes) notifyComposerQuotes();
 }
 
 /**
@@ -197,7 +232,7 @@ export function adoptHomeDraftForSession(sessionId: string): void {
   const home = cache.get(HOME_DRAFT_KEY);
   cache.delete(HOME_DRAFT_KEY);
   if (!home) return;
-  if (!home.text && home.fileReferences.length === 0) return;
+  if (!home.text && home.fileReferences.length === 0 && !home.quotes?.length) return;
   writeComposerDraft(sessionId, home);
 }
 

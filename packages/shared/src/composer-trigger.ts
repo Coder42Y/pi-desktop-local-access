@@ -1,3 +1,4 @@
+import { maskPromptQuoteLines } from "./prompt-quote-lines.js";
 import { formatSessionLink } from "./session-link.js";
 import { fileLineLabel, type FileLineRange } from "./file-line-reference.js";
 
@@ -140,7 +141,8 @@ export function findSkillMentions(
   skillIds: ReadonlyMap<string, string>,
 ): SkillMention[] {
   const mentions: SkillMention[] = [];
-  for (const match of content.matchAll(/(^|\s)\/([^\s]+)/g)) {
+  const visible = maskPromptQuoteLines(content);
+  for (const match of visible.matchAll(/(^|\s)\/([^\s]+)/g)) {
     const id = skillIds.get(match[2]);
     if (!id) continue;
     const start = match.index + match[1].length;
@@ -162,7 +164,8 @@ export function findAgentMentions(
   agentNames: ReadonlySet<string>,
 ): AgentMention[] {
   const mentions: AgentMention[] = [];
-  for (const match of content.matchAll(
+  const visible = maskPromptQuoteLines(content);
+  for (const match of visible.matchAll(
     /(^|\s)@([a-z0-9][a-z0-9-]*)(?=$|\s|[,;:!?)\]，。；：！？、）]|\.(?:\s|$))/g,
   )) {
     if (!agentNames.has(match[2])) continue;

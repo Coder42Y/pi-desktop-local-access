@@ -4,6 +4,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type Dispatch,
   type RefObject,
   type SetStateAction,
@@ -27,8 +28,12 @@ import {
   pruneComposerDrafts,
   readComposerDraft,
   readComposerDraftRevision,
+  readComposerQuotes,
+  sameComposerQuotes,
   sameDraftFileReference,
+  setComposerQuotes,
   snapshotComposerDraft,
+  subscribeComposerQuotes,
   writeComposerDraft,
   markComposerDraftEdited,
 } from "../../../../lib/composer-draft-cache";
@@ -99,6 +104,9 @@ export type ComposerDraftController = {
   snapshotReferences: (sourceSessionId: string) => ComposerDraftSnapshot["fileReferences"];
   draftSnapshot: (text: string) => ComposerDraftSnapshot;
   draftRevision: (key: string) => number;
+  quotes: readonly string[];
+  removeQuote: (quote: string) => void;
+  setQuotes: (quotes: readonly string[]) => void;
   clearDraftForKey: (
     key: string,
     expectedRevision?: number,
@@ -681,6 +689,7 @@ export function useComposerDraft({
         ? snapshotComposerDraft(readLiveDraft(), fileReferencesRef.current, key)
         : readComposerDraft(key);
       if (!current || current.text.trim() !== submitted.text ||
+        !sameComposerQuotes(readComposerQuotes(key), submitted.quotes) ||
         current.fileReferences.length !== submitted.fileReferences.length ||
         current.fileReferences.some((reference, index) =>
           !sameDraftFileReference(reference, submitted.fileReferences[index]))) return;
@@ -705,14 +714,14 @@ export function useComposerDraft({
     const currentKey = draftKeyForSession(currentActiveSessionId);
     if (currentKey !== key) {
       const cached = readComposerDraft(key);
-      if (!cached?.text && !cached?.fileReferences.length) {
+      if (!cached?.text && !cached?.fileReferences.length && !cached?.quotes?.length) {
         markComposerDraftEdited(key);
         writeComposerDraft(key, snapshot);
       }
       return;
     }
     if (valueRef.current.trim()) return;
-    if (fileReferencesRef.current.some((reference) => reference.sessionId === (currentActiveSessionId ?? ""))) return;
+    if (readComposerQuotes(key).length) return;
     markComposerDraftEdited(key);
     const sessionId = currentActiveSessionId ?? "";
     const restoredReferences = snapshot.fileReferences.map((fileReference) =>
@@ -725,17 +734,28 @@ export function useComposerDraft({
       ...restored.references,
     ]);
     setCursor(restored.text.length);
+    setComposerQuotes(key, snapshot.quotes ?? []);
   };
 
-  const draftSnapshot = (text: string): ComposerDraftSnapshot => ({
-    text: text.trim(),
-    fileReferences: activeFileReferences
-      .filter(
-        (fileReference) =>
-          !fileReference.token || text.includes(fileReference.token),
-      )
-      .map(draftFileReference),
-  });
+  const quotes = useSyncExternalStore(
+    subscribeComposerQuotes,
+    () => readComposerQuotes(draftKey),
+    () => readComposerQuotes(draftKey),
+  );
+  const draftSnapshot = (text: string): ComposerDraftSnapshot => {
+    const currentQuotes = readComposerQuotes(draftKeyRef.current);
+    return {
+      text: text.trim(),
+      fileReferences: activeFileReferences
+        .filter(
+          (fileReference) =>
+            !fileReference.token || text.includes(fileReference.token),
+        )
+        .map(draftFileReference),
+      ...(currentQuotes.length ? { quotes: [...currentQuotes] } : {}),
+    };
+  };
+  const setQuotes = (next: readonly string[]) => setComposerQuotes(draftKeyRef.current, next);
 
   return {
     imagePreview,
@@ -778,6 +798,12 @@ export function useComposerDraft({
     snapshotReferences,
     draftSnapshot,
     draftRevision: readComposerDraftRevision,
+    quotes,
+    removeQuote: (quote) => setComposerQuotes(
+      draftKeyRef.current,
+      readComposerQuotes(draftKeyRef.current).filter((item) => item !== quote),
+    ),
+    setQuotes,
     clearDraftForKey,
     restoreDraftForKey,
   };

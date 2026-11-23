@@ -1,3 +1,5 @@
+import { maskPromptQuoteLines } from "./prompt-quote-lines.js";
+
 /**
  * Session links (`pi-desktop://session/<id>`): the one way a conversation is
  * referenced from another one.
@@ -37,8 +39,9 @@ export function formatSessionLink(sessionId: string): string {
  */
 export function parseSessionLinks(text: string): string[] {
   if (!text?.includes(`${SESSION_LINK_SCHEME}://`)) return [];
+  const visible = maskPromptQuoteLines(text);
   const found: string[] = [];
-  for (const match of text.matchAll(SESSION_LINK_PATTERN)) {
+  for (const match of visible.matchAll(SESSION_LINK_PATTERN)) {
     const id = match[1];
     if (!SESSION_LINK_ID.test(id)) continue;
     if (found.includes(id)) continue;
@@ -66,8 +69,9 @@ export function sessionLinkSpans(
   text: string,
 ): Array<{ id: string; start: number; end: number }> {
   if (!text?.includes(`${SESSION_LINK_SCHEME}://`)) return [];
+  const visible = maskPromptQuoteLines(text);
   const spans: Array<{ id: string; start: number; end: number }> = [];
-  for (const match of text.matchAll(SESSION_LINK_PATTERN)) {
+  for (const match of visible.matchAll(SESSION_LINK_PATTERN)) {
     const id = match[1];
     if (!SESSION_LINK_ID.test(id) || match.index === undefined) continue;
     spans.push({ id, start: match.index, end: match.index + match[0].length });

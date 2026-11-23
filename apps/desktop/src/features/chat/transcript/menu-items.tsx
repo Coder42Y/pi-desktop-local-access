@@ -137,6 +137,7 @@ export function assistantTurnMenuItems({
   actions,
   onRegenerate,
   onBranch,
+  onQuote,
 }: {
   t: TFunction;
   answer: string;
@@ -146,6 +147,7 @@ export function assistantTurnMenuItems({
   actions: MenuItemActions;
   onRegenerate: () => void;
   onBranch: () => void;
+  onQuote?: () => void;
 }): ContextMenuItem[] {
   const items: ContextMenuItem[] = [];
   if (answer.trim()) {
@@ -160,6 +162,14 @@ export function assistantTurnMenuItems({
       label: t("chat.selectMessageText"),
       icon: selectIcon(),
       onSelect: () => actions.selectText(selectTarget),
+    });
+  }
+  if (onQuote) {
+    items.push({
+      id: "quote-selection",
+      label: t("chat.quoteInComposer"),
+      icon: selectIcon(),
+      onSelect: onQuote,
     });
   }
   if (complete) {

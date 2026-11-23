@@ -38,6 +38,8 @@ export type ComposerDraftFileReference = {
 export type ComposerDraftSnapshot = {
   text: string;
   fileReferences: ComposerDraftFileReference[];
+  /** Model-reply excerpts kept apart from the editable request. */
+  quotes?: string[];
 };
 
 export type ComposerPrefill = ComposerDraftSnapshot & {

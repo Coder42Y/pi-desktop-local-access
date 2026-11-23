@@ -14,6 +14,7 @@ import type { ComposerDraftSnapshot } from "./composer-smart-stop";
 export type ComposerHistoryEntry = {
   text: string;
   fileReferences: ComposerDraftSnapshot["fileReferences"];
+  quotes?: string[];
 };
 
 type HistoryBucket = { sessionId: string; entries: ComposerHistoryEntry[] };
@@ -53,6 +54,15 @@ function readReference(value: unknown): HistoryReference | null {
     ...(typeof row.token === "string" && row.token ? { token: row.token } : {}),
   };
 }
+function readQuotes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.length > 0);
+}
+
+function sameQuoteList(left: readonly string[] = [], right: readonly string[] = []): boolean {
+  return left.length === right.length && left.every((quote, index) => quote === right[index]);
+}
+
 
 function readEntry(value: unknown): ComposerHistoryEntry | null {
   if (!value || typeof value !== "object") return null;
@@ -64,8 +74,9 @@ function readEntry(value: unknown): ComposerHistoryEntry | null {
     if (!parsed) return null;
     fileReferences.push(parsed);
   }
-  if (!row.text.trim() && fileReferences.length === 0) return null;
-  return { text: row.text, fileReferences };
+  if (!row.text.trim() && fileReferences.length === 0 && !readQuotes(row.quotes).length) return null;
+  const quotes = readQuotes(row.quotes);
+  return { text: row.text, fileReferences, ...(quotes.length ? { quotes } : {}) };
 }
 
 /** Tolerant read: malformed buckets, entries, and rows are dropped, not fatal. */
@@ -119,6 +130,7 @@ export function loadComposerInputHistory(sessionId: string): ComposerHistoryEntr
 function sameContent(left: ComposerHistoryEntry, right: ComposerHistoryEntry): boolean {
   return (
     left.text === right.text &&
+    sameQuoteList(left.quotes, right.quotes) &&
     left.fileReferences.length === right.fileReferences.length &&
     left.fileReferences.every(
       (reference, index) => reference.path === right.fileReferences[index]?.path,
@@ -132,10 +144,12 @@ export function rememberComposerInput(
   snapshot: ComposerDraftSnapshot,
 ): void {
   if (!sessionId) return;
-  if (!snapshot.text.trim() && snapshot.fileReferences.length === 0) return;
+  if (!snapshot.text.trim() && snapshot.fileReferences.length === 0 && !snapshot.quotes?.length) return;
   const entry: ComposerHistoryEntry = {
     text: snapshot.text,
     fileReferences: snapshot.fileReferences.map((reference) => ({ ...reference })),
+    ...(snapshot.quotes?.length ? { quotes: [...snapshot.quotes] } : {}),
+  };
   };
   const buckets = readBuckets();
   const current = buckets.find((bucket) => bucket.sessionId === sessionId);

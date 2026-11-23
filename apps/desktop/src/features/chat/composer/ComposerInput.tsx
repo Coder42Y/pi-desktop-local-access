@@ -8,7 +8,8 @@ import type {
   RefObject,
   SetStateAction,
 } from "react";
-import { IconChevronDown, IconChevronUp } from "../../../components/icons";
+import { IconChevronDown, IconChevronUp, IconX } from "../../../components/icons";
+import { useTranslation } from "react-i18next";
 import { TooltipButton } from "../../../components/ui";
 import { editorSelectionRange, readEditorValue } from "./editor";
 import { ComposerImagePreview } from "./ComposerImagePreview";
@@ -22,6 +23,10 @@ import type { ComposerImagePreviewController } from "./hooks/useComposerImagePre
 
 export type ComposerInputProps = {
   imagePreview?: ComposerImagePreviewController;
+  quoteDraft?: {
+    quotes: readonly string[];
+    removeQuote: (quote: string) => void;
+  };
   directoryReferences?: ComposerFileReference[];
   onRemoveDirectory?: (id: string) => void;
   inputRef: RefObject<HTMLDivElement | null>;
@@ -62,6 +67,7 @@ export type ComposerInputProps = {
 /** Rich contenteditable input; draft state and async operations stay outside. */
 export function ComposerInput({
   imagePreview,
+  quoteDraft,
   directoryReferences = [],
   onRemoveDirectory,
   inputRef,
@@ -86,6 +92,7 @@ export function ComposerInput({
   onFocus,
   onBlur,
 }: ComposerInputProps) {
+  const { t } = useTranslation();
   useLayoutEffect(() => {
     const editor = inputRef.current;
     return editor ? installComposerDeletionGuard(editor) : undefined;
@@ -95,6 +102,23 @@ export function ComposerInput({
     <div className="composer-input-wrap">
       {imagePreview ? <ComposerImagePreview controller={imagePreview} /> : null}
       {imagePreview ? <ComposerImageHover controller={imagePreview} editorRef={inputRef} /> : null}
+      {quoteDraft?.quotes.length ? (
+        <ul className="composer-quotes">
+          {quoteDraft.quotes.map((quote) => (
+            <li key={quote} className="composer-quote">
+              <q>{quote}</q>
+              <TooltipButton
+                type="button"
+                tooltip={t("chat.removeComposerQuote")}
+                ariaLabel={t("chat.removeComposerQuote")}
+                onClick={() => quoteDraft.removeQuote(quote)}
+              >
+                <IconX size={14} />
+              </TooltipButton>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {directoryReferences.length > 0 ? (
         <div className="directory-reference-list">
           {directoryReferences.map((reference) => (

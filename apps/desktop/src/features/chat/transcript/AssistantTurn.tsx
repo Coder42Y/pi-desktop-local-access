@@ -43,7 +43,8 @@ import { MessageRow } from "./MessageRow";
 import { ReviewChangeCard } from "../../../components/ReviewChangeCard";
 import { ToolRow } from "./ToolRow";
 import { assistantTurnMenuItems } from "./menu-items";
-import {
+import { selectedReplyExcerpt } from "./quote-selection";
+import { readComposerQuotes, setComposerQuotes } from "../../../lib/composer-draft-cache";
   useChatTextActions,
   useTranscriptMenu,
 } from "./TranscriptMenu";
@@ -312,6 +313,16 @@ export const AssistantTurn = memo(function AssistantTurn({
     owned by a single message part could not offer them honestly.
   */
   const onContextMenu = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const excerpt = selectedReplyExcerpt(event.currentTarget, event.target);
+    const quote = () => {
+      if (!excerpt) return;
+      const current = useAppStore.getState();
+      if (current.activeSessionId !== paneSessionId) return;
+      const owner = current.sessions.find((item) => item.id === paneSessionId);
+      if (!sessionAllows(owner ?? (paneSessionId.startsWith("remote:") ? { id: paneSessionId } : undefined), "canPrompt")) return;
+      const quotes = readComposerQuotes(paneSessionId);
+      if (!quotes.includes(excerpt)) setComposerQuotes(paneSessionId, [...quotes, excerpt]);
+    };
     openTranscriptMenu(event, {
       label: t("chat.messageMenu"),
       items: assistantTurnMenuItems({
@@ -325,6 +336,7 @@ export const AssistantTurn = memo(function AssistantTurn({
           ].at(-1) ?? null,
         complete: complete && Boolean(actionMessage) && canEditMessages,
         actions: { copyText, selectText },
+        onQuote: excerpt ? quote : undefined,
         onRegenerate: () => {
           if (actionMessage) void retryAssistantMessage(actionMessage.id);
         },

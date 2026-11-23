@@ -69,6 +69,7 @@ export function useComposerInputHistory({
       direction,
       draftEmpty:
         !draft.readLiveDraft().trim() &&
+        !draft.quotes.length &&
         !draft.fileReferencesRef.current.some(
           (reference) => reference.sessionId === referenceSessionId,
         ),
@@ -83,7 +84,10 @@ export function useComposerInputHistory({
     });
     entriesRef.current = result.entries;
     indexRef.current = result.index;
-    if (result.applied) appliedRevisionRef.current = draft.draftRevision(draftKey);
+    if (result.applied && result.index !== null) {
+      draft.setQuotes(result.entries[result.index]?.quotes ?? []);
+      appliedRevisionRef.current = draft.draftRevision(draftKey);
+    }
     return result.consumed;
   };
 
