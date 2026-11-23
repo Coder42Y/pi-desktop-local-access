@@ -3492,7 +3492,7 @@ Do not invent objections or turn speculative risks into blockers. Stop when the 
       ? " `path` is workspace-relative, or an absolute path inside the session scratch directory."
       : "";
     const externalPathHint =
-      " An explicit path outside the workspace and session scratch roots requires permission unless the effective mode is Auto.";
+      " Explicit reads outside the workspace are allowed subject to OS permissions and existing ignore rules. Outside-workspace changes and arbitrary shell execution require one explicit conversation-wide filesystem-write authorization for the current local or SSH Host, even in Auto; subsequent authorized changes do not prompt again.";
     const describe = (toolName: string): string => {
       if (toolName === "GenerateImages") return imageGenerationDescription;
       if (toolName === "Computer") return computerUseDescription;

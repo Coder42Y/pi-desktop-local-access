@@ -120,6 +120,7 @@ export function createHostRuntime({
         argsPreview: string;
         risk: Risk;
         reason: string;
+        externalAccess?: { kind: "filesystem-write"; hostKey?: string };
       };
       // A delegate's call is already in `activeToolCalls` by the time the host
       // asks: the sidecar forwards `tool_start` before it executes the tool.
@@ -157,6 +158,7 @@ export function createHostRuntime({
             argsPreview: permission.argsPreview,
             risk: permission.risk,
             reason: permission.reason,
+            ...(permission.externalAccess ? { externalAccess: permission.externalAccess } : {}),
             ...(asking?.agentName ? { agentName: asking.agentName } : {}),
             ...(asking?.parentToolCallId
               ? { parentToolCallId: asking.parentToolCallId }

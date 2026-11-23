@@ -194,6 +194,31 @@ test("approval.requested kind:tool synthesizes a local tool_permission_request w
   assert.equal(request.reason, "run rm -rf");
 });
 
+test("filesystem-write approval uses the connected host, not a remote display label", () => {
+  const { bridge, events } = collect();
+  bridge.handle(makeEnvelope({
+    kind: "approval.requested",
+    turnId: "turn-1",
+    payload: {
+      id: "appr-ext",
+      sessionId: HOST_SESSION_ID,
+      turnId: "turn-1",
+      kind: "tool",
+      summary: "write outside",
+      expiresAt: "2026-09-18T10:05:00.000Z",
+      revision: 4,
+      toolName: "Write",
+      risk: "high",
+      allowedDecisions: ["allow-once", "allow-session", "deny"],
+      externalAccess: { kind: "filesystem-write", hostKey: "untrusted-label-from-remote" },
+    },
+  }));
+  assert.deepEqual(events[0].payload.event.request.externalAccess, {
+    kind: "filesystem-write",
+    hostKey: HOST_KEY,
+  });
+});
+
 test("approval.requested kind:plan and kind:goal are dropped — the plan card rides planning_state", () => {
   const { bridge, events } = collect();
   const base = {

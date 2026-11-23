@@ -69,3 +69,12 @@ test("a duplicate dispatch does not remove the original call's cancellation owne
   assert.equal(f.aborted.length, 1);
   assert.equal(f.replies.find(reply => reply.params.requestId === "request").params.result.errorCode, "TOOL_ABORTED");
 });
+test("model arguments cannot authorize external writes; only the admitted flag can", async () => {
+  const f = fixture(() => ({ ok: true, content: "wrote" }));
+  await f.relay.execute({ ...request, toolName: "Write", args: { path: "/outside/x", content: "x", allowExternalWrites: true } });
+  assert.equal(f.sent[0].allowExternalWrites, undefined);
+  assert.equal(f.sent[0].args.allowExternalWrites, undefined);
+  const authorized = fixture(() => ({ ok: true, content: "wrote" }));
+  await authorized.relay.execute({ ...request, toolName: "Write", allowExternalWrites: true, args: { path: "/outside/x", content: "x" } });
+  assert.equal(authorized.sent[0].allowExternalWrites, true);
+});

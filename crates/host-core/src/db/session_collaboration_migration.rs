@@ -20,3 +20,26 @@ pub(super) fn migrate(conn: &Connection, path: &Path) -> Result<()> {
         .context("commit session collaboration migration")?;
     Ok(())
 }
+
+pub(super) fn migrate_external_write_ceiling(conn: &Connection, path: &Path) -> Result<()> {
+    let backup = create_migration_backup(conn, path, 34)?;
+    let tx = conn.unchecked_transaction()?;
+    let has_column: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('session_collaboration_messages') WHERE name='external_write_ceiling')",
+        [],
+        |row| row.get(0),
+    )?;
+    if !has_column {
+        tx.execute_batch(
+            "ALTER TABLE session_collaboration_messages ADD COLUMN external_write_ceiling TEXT;",
+        )?;
+    }
+    tx.pragma_update(None, "user_version", 35i64)?;
+    tx.commit().with_context(|| {
+        format!(
+            "commit schema v34 to v35 migration; backup {} remains",
+            backup.display()
+        )
+    })?;
+    Ok(())
+}

@@ -16,6 +16,12 @@ Reapplied on top of that upstream tree:
 - SSH owner previews of an explicit absolute file outside the project. Relative
   paths, listing, search, instructions and tools stay inside the project. A
   remote preview does not open the local file manager or OS.
+- Conversation-wide external filesystem write consent. Explicit Read/Glob/Grep
+  outside the project needs no app-level path consent. External Write/Edit,
+  an Edit move destination, and every Bash still need one Host-issued
+  filesystem-write grant for that conversation on that local or SSH machine,
+  even in Auto. A local grant does not authorize another machine. Model
+  arguments cannot set `allowExternalWrites`.
 - Update discovery stays on `Coder42Y/pi-desktop-local-access`, channel `local`.
   It does not follow `vastsa/PI-Desktop`.
 - The `plugins/ssh-upload` plugin and its tests.
@@ -31,8 +37,6 @@ has been rewritten:
 - Workspace session messaging. Upstream ADR 0239 already owns cross-session
   send, status, result and completion. The old fork `workspace.rs` is not
   replayed.
-- Conversation-wide external filesystem write consent. Upstream collaboration
-  does not grant that. It remains unported.
 
 The next local release tag must match `vX.Y.Z-local.N`. The local update
 provider rejects any other version or tag. Source on this branch still reports

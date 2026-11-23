@@ -93,6 +93,15 @@ impl Harness {
         command: &str,
         gate: Option<Value>,
     ) -> Result<Value, Value> {
+        {
+            let mut state = self.state.lock().await;
+            let grants = state.session_grants.entry(self.session_id.clone()).or_default();
+            let key = crate::permissions::external_access::ExternalAccess::filesystem_write(None)
+                .grant_key();
+            if !grants.contains(&key) {
+                grants.push(key);
+            }
+        }
         let shell = crate::tools::shell::default_shell_id();
         let mut params = json!({
             "sessionId": self.session_id,
@@ -227,50 +236,21 @@ async fn run_gates_use_the_exit_code_tools_execute_recorded() {
         .await
         .unwrap();
     assert_eq!(verify["status"], "run");
-    // Host-origin continuations use accept-edits even in an Auto session.
-    // Resolve the real permission request instead of leaving this test waiting.
-    let state = h.state.clone();
-    let tx = h.tx.clone();
+    // The conversation already granted filesystem writes, so the host
+    // continuation runs the gate command without a second Bash prompt.
     let shell = crate::tools::shell::default_shell_id();
-    let execute = tokio::spawn(handle_request(
-        state,
-        "tools.execute",
-        json!({
-            "sessionId": h.session_id, "turnId": "t2", "toolCallId": "gate-1",
-            "toolName": "Bash", "args": { "command": FAIL }, "mode": "agent",
-            "expectedCommandShellId": shell,
-            "expectedCommandShellDialect": crate::tools::shell::dialect_for_id(shell),
-            "modeGate": { "runId": run_id, "gateIndex": 0 }
-        }),
-        tx,
-    ));
-    let mut observed_mode_events = Vec::new();
-    let approval = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            let line = h.rx.recv().await.expect("permission stream remains open");
-            let event: Value = serde_json::from_str(&line).unwrap();
-            if event["method"] == "modes.changed" {
-                observed_mode_events.push(event["params"].clone());
-            }
-            if event["method"] == "permissions.request" {
-                break event;
-            }
-        }
-    })
-    .await
-    .expect("host continuation must request approval");
-    h.call(
-        "permissions.resolve",
-        json!({
-            "requestId": approval["params"]["requestId"], "decision": "allow-once"
-        }),
-    )
-    .await
-    .unwrap();
-    let failed = tokio::time::timeout(std::time::Duration::from_secs(10), execute)
+    let failed = h
+        .call(
+            "tools.execute",
+            json!({
+                "sessionId": h.session_id, "turnId": "t2", "toolCallId": "gate-1",
+                "toolName": "Bash", "args": { "command": FAIL }, "mode": "agent",
+                "expectedCommandShellId": shell,
+                "expectedCommandShellDialect": crate::tools::shell::dialect_for_id(shell),
+                "modeGate": { "runId": run_id, "gateIndex": 0 }
+            }),
+        )
         .await
-        .unwrap()
-        .unwrap()
         .unwrap();
     assert_eq!(failed["ok"], false);
     let blocked = h
@@ -287,8 +267,7 @@ async fn run_gates_use_the_exit_code_tools_execute_recorded() {
         .contains("exited with code 3"));
     assert_eq!(blocked["run"]["state"], "waiting");
     assert_eq!(blocked["run"]["waitReason"], "retries");
-    observed_mode_events.extend(h.mode_events());
-    assert!(observed_mode_events.len() >= 6);
+    assert!(h.mode_events().len() >= 6);
 
     let got = h
         .call("modes.get", json!({ "sessionId": h.session_id }))
@@ -310,7 +289,7 @@ async fn host_started_turns_are_capped_at_accept_edits() {
     let evaluate = || {
         h.call(
             "permissions.evaluate",
-            json!({ "sessionId": h.session_id, "toolName": "Bash", "args": { "command": "ls" } }),
+            json!({ "sessionId": h.session_id, "toolName": "GenerateImages", "args": {} }),
         )
     };
     let started = h.start("t1").await;
@@ -337,7 +316,7 @@ async fn host_started_turns_are_capped_at_accept_edits() {
         .unwrap();
     assert_eq!(claimed["claimed"], true);
     assert_eq!(claimed["run"]["activeOrigin"], "host");
-    // Nobody watches a continuation: Bash prompts again under accept-edits.
+    // Nobody watches a continuation: a high-risk tool prompts again under accept-edits.
     assert!(evaluate().await.unwrap()["decision"].is_null());
 }
 
@@ -431,7 +410,7 @@ async fn builtin_goal_continuations_inherit_the_session_permission() {
         let run_id = first["run"]["id"].as_str().unwrap();
         let evaluate = || {
             h.call("permissions.evaluate", json!({
-            "sessionId": h.session_id, "toolName": "Bash", "args": { "command": "echo goal" }
+            "sessionId": h.session_id, "toolName": "BrowserPreview", "args": { "path": "page.html" }
         }))
         };
         let expected = if permission == "auto" {

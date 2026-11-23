@@ -21,6 +21,7 @@ fn send(db: &Database, source: &str, target: &str, key: &str) -> Message {
         "content":"Review the change","idempotencyKey":key,"notifyOnCompletion":true}),
         target,
         "task",
+        &std::collections::HashMap::new(),
     )
     .unwrap()
 }
@@ -61,6 +62,7 @@ fn sessions_are_reused_and_send_is_idempotent() {
         "content":"different","idempotencyKey":"one"}),
         &child,
         "task",
+        &std::collections::HashMap::new(),
     )
     .unwrap_err();
     assert!(mismatch.to_string().starts_with("IDEMPOTENCY_CONFLICT"));
@@ -487,6 +489,7 @@ fn a_parent_may_run_more_workers_than_the_old_fixed_cap_but_workers_cannot_recur
                 "content":format!("Worker {index}"),"idempotencyKey":format!("worker-{index}"),
                 "notifyOnCompletion":true
             }),
+            &std::collections::HashMap::new(),
         )
         .unwrap();
         children.push(created["sessionId"].as_str().unwrap().to_string());
@@ -506,6 +509,7 @@ fn a_parent_may_run_more_workers_than_the_old_fixed_cap_but_workers_cannot_recur
             "sourceSessionId":children[0],"pluginId":"pi.session-orchestrator",
             "content":"Grandchild","idempotencyKey":"grandchild","notifyOnCompletion":true
         }),
+        &std::collections::HashMap::new(),
     )
     .unwrap_err();
     assert!(denied.to_string().starts_with("PERMISSION_DENIED"));

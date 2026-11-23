@@ -2304,6 +2304,10 @@ export const ptBR = {
     allowPrompt: "Permitir a execução de <highlight>{{tool}}</highlight>?",
     allowOnce: "Permitir uma vez",
     allowSession: "Permitir nesta conversa",
+    externalWriteScope: "Permite que a conversa atual e seus subagentes modifiquem, gravem ou excluam QUALQUER arquivo acessível fora do espaço de trabalho atual nesta máquina ou no host SSH indicado abaixo. Esta autorização única cobre operações posteriores de Write/Edit/Bash sem perguntar novamente durante esta conversa. Não se aplica a outras conversas.",
+    externalWriteLocalHost: "Destino: esta máquina",
+    externalWriteRemoteHost: "Destino: host SSH",
+    externalWriteGrant: "Autorizar acesso fora do espaço de trabalho nesta conversa",
     deny: "Negar",
     risk: {
       high: "Alto risco",

@@ -2354,6 +2354,10 @@ sklm: {
     allowPrompt: "Allow <highlight>{{tool}}</highlight> to run?",
     allowOnce: "Allow once",
     allowSession: "Allow for this chat",
+    externalWriteScope: "Grant permission to modify, write, or delete ANY accessible file outside the current workspace for the current conversation and its subagents on the machine or SSH host shown below. This one-time authorization covers subsequent Write/Edit/Bash operations without asking again during this conversation. It does not apply to other conversations.",
+    externalWriteLocalHost: "Target: this machine",
+    externalWriteRemoteHost: "Target: SSH host",
+    externalWriteGrant: "Grant outside-workspace access for this conversation",
     deny: "Deny",
     risk: {
       high: "High risk",

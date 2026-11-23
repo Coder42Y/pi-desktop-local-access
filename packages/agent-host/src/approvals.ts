@@ -79,11 +79,10 @@ export class ApprovalBroker {
       ...(request.agentName ? { agentName: request.agentName } : {}),
       ...(request.parentToolCallId ? { parentToolCallId: request.parentToolCallId } : {}),
       ...(request.nestedParentToolCallId ? { nestedParentToolCallId: request.nestedParentToolCallId } : {}),
-      allowedDecisions: context.allowSession
+      ...(request.externalAccess ? { externalAccess: request.externalAccess } : {}),
+      allowedDecisions: context.allowSession || request.externalAccess?.kind === "filesystem-write"
         ? [...RACP_TOOL_APPROVAL_DECISIONS]
         : RACP_TOOL_APPROVAL_DECISIONS.filter((decision) => decision !== "allow-session"),
-    };
-    this.pending.set(approval.id, { request: approval, expiresAtMs });
     return approval;
   }
 

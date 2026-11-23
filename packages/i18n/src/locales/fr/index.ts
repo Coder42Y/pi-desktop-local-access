@@ -2334,6 +2334,10 @@ sklm: {
     "allowPrompt": "Autoriser <highlight>{{tool}}</highlight> à s'exécuter ?",
     "allowOnce": "Autoriser une fois",
     "allowSession": "Autoriser cette discussion",
+    "externalWriteScope": "Autorise la conversation actuelle et ses sous-agents à modifier, écrire ou supprimer TOUT fichier accessible hors de l’espace de travail actuel sur la machine ou l’hôte SSH indiqué ci-dessous. Cette autorisation unique couvre les opérations Write/Edit/Bash suivantes sans redemander pendant cette conversation. Elle ne s’applique pas aux autres conversations.",
+    "externalWriteLocalHost": "Cible : cette machine",
+    "externalWriteRemoteHost": "Cible : hôte SSH",
+    "externalWriteGrant": "Autoriser l’accès hors de l’espace de travail pour cette conversation",
     "deny": "Refuser",
     "risk": {
       "high": "Risque élevé",

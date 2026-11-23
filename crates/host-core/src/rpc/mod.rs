@@ -1508,18 +1508,7 @@ fn resolve_tool_workspace_for_call(
 /// based on the same resolver used for execution so `..` and symlink escapes
 /// cannot avoid the permission card. Contained roots (scratch, visualization)
 /// are recognized lexically before their lazy directories exist.
-fn requires_external_path_permission(
-    workspace_path: Option<&str>,
-    roots: &ContainedRoots,
-    tool_name: &str,
-    args: &Value,
-) -> bool {
-    if !matches!(tool_name, "Read" | "Glob" | "Grep" | "Write" | "Edit") {
-        return false;
-    }
-    let Some(path) = args.get("path").and_then(Value::as_str) else {
-        return false;
-    };
+fn path_is_external(workspace_path: Option<&str>, roots: &ContainedRoots, path: &str) -> bool {
     if let Some(root) = roots.lexical_root(path) {
         return !root.allows_implicit_access();
     }
@@ -1530,6 +1519,35 @@ fn requires_external_path_permission(
         workspace::resolve_tool_path(Path::new(workspace_path), roots, path),
         Err(error) if error == "PATH_OUTSIDE_WORKSPACE"
     )
+}
+
+fn requires_external_path_permission(
+    workspace_path: Option<&str>,
+    roots: &ContainedRoots,
+    tool_name: &str,
+    args: &Value,
+) -> bool {
+    if !matches!(tool_name, "Read" | "Glob" | "Grep" | "Write" | "Edit") {
+        return false;
+    }
+    let path_external = args
+        .get("path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| path_is_external(workspace_path, roots, path));
+    if path_external {
+        return true;
+    }
+    if tool_name != "Edit" {
+        return false;
+    }
+    let Some(ops) = args.get("ops").and_then(Value::as_str) else {
+        return false;
+    };
+    let Ok(parsed) = crate::tools::hashline::parse_ops(ops) else {
+        return false;
+    };
+    crate::tools::hashline::mv_dest(&parsed)
+        .is_some_and(|dest| path_is_external(workspace_path, roots, dest))
 }
 
 /// Contained roots of a local session: scratch (D114) then visualization
@@ -2038,7 +2056,12 @@ async fn handle_request(
         }
         method if method.starts_with("session.collaboration.") => {
             let st = state.lock().await;
-            crate::session_collaboration::handle(&st.db, method, &params)
+            crate::session_collaboration::handle_with_grants(
+                &st.db,
+                method,
+                &params,
+                &st.session_grants,
+            )
                 .map_err(session_collaboration_rpc_err)
         }
         "app.handshake" => {
@@ -4560,6 +4583,9 @@ async fn handle_request(
                                 session_grants: &st.session_grants,
                                 declared_risk: p.declared_risk.as_deref(),
                                 requires_external_path_permission: external_path_permission,
+                                external_host_key: remote_workspace
+                                    .as_ref()
+                                    .map(|remote| remote.host_key.as_str()),
                                 plan_safe_actions: p.plan_safe_actions.as_deref(),
                             },
                         );
@@ -4580,6 +4606,7 @@ async fn handle_request(
                     {
                         auto = Some(PermissionDecision::AllowOnce);
                     }
+                    let filesystem_scope = p.tool_name == "Bash" || external_path_permission;
                     if let Some(decision) = auto {
                         (
                             Some(decision),
@@ -4591,8 +4618,8 @@ async fn handle_request(
                             command_shell_id.clone(),
                         )
                     } else {
-                        let reason = if external_path_permission {
-                            "Accesses a path outside the session workspace"
+                        let reason = if filesystem_scope {
+                            "External filesystem writes require authorization for this session and its subagents on this host"
                         } else {
                             match p.tool_name.as_str() {
                                 "Write" | "Edit" => "Modifies files in your workspace",
@@ -4615,6 +4642,11 @@ async fn handle_request(
                                 reason,
                                 declared_risk: p.declared_risk.as_deref(),
                                 command_shell_id: command_shell_id.as_deref(),
+                                external_access: filesystem_scope.then(|| {
+                                    crate::permissions::external_access::ExternalAccess::filesystem_write(
+                                        remote_workspace.as_ref().map(|remote| remote.host_key.as_str()),
+                                    )
+                                }),
                             },
                         );
                         st.register_pending_permission(
@@ -4653,6 +4685,9 @@ async fn handle_request(
                         });
                         if let Some(shell_id) = req.command_shell_id.as_deref() {
                             permission_params["commandShellId"] = json!(shell_id);
+                        }
+                        if let Some(scope) = &req.external_access {
+                            permission_params["externalAccess"] = json!(scope);
                         }
                         emit_notification(&tx, "permissions.request", permission_params).await;
                         tracing::info!(
@@ -4754,13 +4789,36 @@ async fn handle_request(
                     return Ok(denied_result);
                 }
 
-                if matches!(final_decision, PermissionDecision::AllowSession) {
+                if matches!(final_decision, PermissionDecision::AllowSession)
+                    && p.tool_name != "Bash"
+                    && !external_path_permission
+                {
                     let mut st = state.lock().await;
                     st.session_grants
                         .entry(p.session_id.clone())
                         .or_default()
                         .push(p.tool_name.clone());
                 }
+                let external_host = remote_workspace
+                    .as_ref()
+                    .map(|remote| remote.host_key.as_str());
+                let external_path_permission = {
+                    let st = state.lock().await;
+                    let allowed = crate::session_collaboration::permissions::external_allowed(
+                        &st.db,
+                        &p.session_id,
+                        external_host,
+                    )
+                    .map_err(|error| rpc_err(1000, error.to_string(), "INTERNAL"))?;
+                    matches!(p.tool_name.as_str(), "Read" | "Glob" | "Grep")
+                        || (allowed
+                            && (external_path_permission
+                                || crate::permissions::external_access::has_grant(
+                                    &st.session_grants,
+                                    &p.session_id,
+                                    external_host,
+                                )))
+                };
 
                 // Admission follows permission so approval waits do not occupy
                 // execution capacity. Keep this permit through review, the
@@ -5020,6 +5078,8 @@ async fn handle_request(
                         &tx,
                         &p,
                         remote,
+                        external_path_permission
+                            && matches!(p.tool_name.as_str(), "Write" | "Edit" | "Bash"),
                         cancellation_receiver.clone(),
                     )
                     .await
@@ -5256,21 +5316,21 @@ async fn handle_request(
             let effective_pm = authorization.cap_permission_mode(effective_pm);
             let args = params.get("args").cloned().unwrap_or_else(|| json!({}));
             let workspace_path = resolve_tool_workspace_for_call(&st, session_id, &args)?;
-            let external_path_permission =
-                if remote_tools::session_remote_workspace(&st, session_id)?.is_some() {
-                    remote_tools::requires_external_permission(
-                        workspace_path.as_deref(),
-                        tool_name,
-                        &args,
-                    )
-                } else {
-                    requires_external_path_permission(
-                        workspace_path.as_deref(),
-                        &local_contained_roots(&st.data_dir, session_id, false),
-                        tool_name,
-                        &args,
-                    )
-                };
+            let remote = remote_tools::session_remote_workspace(&st, session_id)?;
+            let external_path_permission = if remote.is_some() {
+                remote_tools::requires_external_permission(
+                    workspace_path.as_deref(),
+                    tool_name,
+                    &args,
+                )
+            } else {
+                requires_external_path_permission(
+                    workspace_path.as_deref(),
+                    &local_contained_roots(&st.data_dir, session_id, false),
+                    tool_name,
+                    &args,
+                )
+            };
             let decision = st
                 .permissions
                 .evaluate_auto_with_permission_mode_and_risk_and_path(PermissionEvaluationParams {
@@ -5281,6 +5341,7 @@ async fn handle_request(
                     session_grants: &st.session_grants,
                     declared_risk,
                     requires_external_path_permission: external_path_permission,
+                    external_host_key: remote.as_ref().map(|item| item.host_key.as_str()),
                     plan_safe_actions: plan_safe_actions.as_deref(),
                 });
             Ok(json!({
@@ -8227,6 +8288,15 @@ mod tests {
             .map(|shell| shell.id)
     }
 
+    fn grant_local_filesystem_writes(state: &mut AppState, session_id: &str) {
+        let key = crate::permissions::external_access::ExternalAccess::filesystem_write(None)
+            .grant_key();
+        let grants = state.session_grants.entry(session_id.to_string()).or_default();
+        if !grants.contains(&key) {
+            grants.push(key);
+        }
+    }
+
     fn alternate_available_test_shell_id(current: &str) -> Option<String> {
         crate::tools::shell::catalog(None)
             .choices
@@ -9917,6 +9987,7 @@ mod tests {
             Some("auto"),
         )
         .unwrap();
+        grant_local_filesystem_writes(&mut app_state, &session.id);
         let state = Arc::new(Mutex::new(app_state));
         let (tx, _rx) = mpsc::unbounded_channel();
         let started_command = descendant_marker_bash_command(&started_marker, &late_marker);
@@ -10006,6 +10077,7 @@ mod tests {
             Some("auto"),
         )
         .unwrap();
+        grant_local_filesystem_writes(&mut app_state, &session.id);
         let state = Arc::new(Mutex::new(app_state));
         let (tx, _rx) = mpsc::unbounded_channel();
         let timeout_started = project.join("timeout-started.txt");
@@ -10085,6 +10157,7 @@ mod tests {
             Some("auto"),
         )
         .unwrap();
+        grant_local_filesystem_writes(&mut app_state, &session.id);
         let state = Arc::new(Mutex::new(app_state));
         let (tx, mut rx) = mpsc::unbounded_channel();
         let result = handle_request(
@@ -10678,7 +10751,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn outside_paths_prompt_in_plan_and_auto_allows_after_mode_switch() {
+    async fn outside_reads_are_unrestricted_and_workspace_only_stays_inside() {
         let data_dir = tempfile::tempdir().unwrap();
         let project = data_dir.path().join("project");
         let outside = data_dir.path().join("outside");
@@ -10710,86 +10783,33 @@ mod tests {
         .unwrap();
         let state = Arc::new(Mutex::new(app_state));
         let (notify_tx, mut notify_rx) = mpsc::unbounded_channel();
-        let request_state = state.clone();
-        let session_id = session.id.clone();
         let path = outside_file.to_string_lossy().into_owned();
-        let path_for_request = path.clone();
-        let pending = tokio::spawn(async move {
-            handle_request(
-                request_state,
-                "tools.execute",
-                json!({
-                    "sessionId": session_id,
-                    "toolCallId": "outside-plan-read",
-                    "toolName": "Read",
-                    "args": { "path": path_for_request },
-                    "mode": "agent"
-                }),
-                notify_tx,
-            )
-            .await
-        });
-
-        let notification = notify_rx.recv().await.unwrap();
-        let notification: Value = serde_json::from_str(&notification).unwrap();
-        assert_eq!(notification["method"], "permissions.request");
-        assert_eq!(
-            notification["params"]["reason"],
-            "Accesses a path outside the session workspace"
-        );
-        assert_eq!(notification["params"]["argsPreview"]["path"], path);
-        let request_id = notification["params"]["requestId"].as_str().unwrap();
-        handle_request(
+        let read = handle_request(
             state.clone(),
-            "permissions.resolve",
-            json!({ "requestId": request_id, "decision": "deny" }),
-            mpsc::unbounded_channel().0,
+            "tools.execute",
+            json!({
+                "sessionId": session.id,
+                "toolCallId": "outside-plan-read",
+                "toolName": "Read",
+                "args": { "path": path },
+                "mode": "agent"
+            }),
+            notify_tx,
         )
         .await
         .unwrap();
-        let denied = pending.await.unwrap().unwrap();
-        assert_eq!(denied["ok"], false);
-        assert_eq!(denied["errorCode"], "TOOL_DENIED");
-
-        let request_state = state.clone();
-        let session_id = session.id.clone();
-        let path_for_request = path.clone();
-        let (notify_tx2, mut notify_rx2) = mpsc::unbounded_channel();
-        let allowed_pending = tokio::spawn(async move {
-            handle_request(
-                request_state,
-                "tools.execute",
-                json!({
-                    "sessionId": session_id,
-                    "toolCallId": "outside-plan-read-allowed",
-                    "toolName": "Read",
-                    "args": { "path": path_for_request },
-                    "mode": "agent"
-                }),
-                notify_tx2,
-            )
-            .await
-        });
-        let notification = notify_rx2.recv().await.unwrap();
-        let notification: Value = serde_json::from_str(&notification).unwrap();
-        let request_id = notification["params"]["requestId"].as_str().unwrap();
-        handle_request(
-            state.clone(),
-            "permissions.resolve",
-            json!({ "requestId": request_id, "decision": "allow-once" }),
-            mpsc::unbounded_channel().0,
-        )
-        .await
-        .unwrap();
-        let allowed = allowed_pending.await.unwrap().unwrap();
-        assert_eq!(allowed["ok"], true);
-        assert_eq!(allowed["content"]["root"], "external");
-        let allowed_content = allowed["content"]["content"].as_str().unwrap();
-        assert!(
-            allowed_content.contains("outside content"),
-            "{allowed_content}"
-        );
-        assert_eq!(allowed["content"]["tag"].as_str().unwrap().len(), 4);
+        assert_eq!(read["ok"], true);
+        assert_eq!(read["content"]["root"], "external");
+        assert!(read["content"]["content"]
+            .as_str()
+            .unwrap()
+            .contains("outside content"));
+        let stray =
+            tokio::time::timeout(std::time::Duration::from_millis(50), notify_rx.recv()).await;
+        match stray {
+            Err(_) | Ok(None) => {}
+            Ok(Some(text)) => panic!("external Read must not prompt: {text}"),
+        }
 
         sessions::configure_session_with_thinking(
             &state.lock().await.db,
@@ -10847,7 +10867,7 @@ mod tests {
                 "sessionId": session.id,
                 "toolCallId": "inside-composer-read",
                 "toolName": "Read",
-                "args": { "path": project_file.to_string_lossy(), "offset": 1, "limit": 1 },
+                "args": { "path": "note.txt", "offset": 1, "limit": 1 },
                 "workspaceOnly": true,
                 "mode": "agent"
             }),
@@ -10992,7 +11012,7 @@ mod tests {
         assert_eq!(notification["method"], "permissions.request");
         assert_eq!(
             notification["params"]["reason"],
-            "Accesses a path outside the session workspace"
+            "External filesystem writes require authorization for this session and its subagents on this host"
         );
         let request_id = notification["params"]["requestId"].as_str().unwrap();
         handle_request(
@@ -11145,6 +11165,10 @@ mod tests {
             assert_eq!(result["ok"], false);
         }
 
+        {
+            let mut st = state.lock().await;
+            grant_local_filesystem_writes(&mut st, &session_id);
+        }
         let bash = handle_request(
             state.clone(),
             "tools.execute",
@@ -11174,6 +11198,7 @@ mod tests {
             Some("ask"),
         )
         .unwrap();
+        state.lock().await.session_grants.remove(&session_id);
         #[cfg(windows)]
         let ask_bash_command = "[Console]::Out.Write('ask-bash')";
         #[cfg(not(windows))]
@@ -11277,12 +11302,16 @@ mod tests {
             assert_eq!(result["ok"], false);
         }
 
-        // Bash still follows the permission mode rather than the allowlist.
+        // Contract modes do not hard-deny Bash. Auto alone still cannot run it.
         #[cfg(windows)]
         let goal_bash_command = "[Console]::Out.Write('goal-bash')";
         #[cfg(not(windows))]
         let goal_bash_command = "printf goal-bash";
         let command_shell_id = crate::tools::shell::default_shell_id();
+        {
+            let mut st = state.lock().await;
+            grant_local_filesystem_writes(&mut st, &session_id);
+        }
         let bash = handle_request(
             state.clone(),
             "tools.execute",

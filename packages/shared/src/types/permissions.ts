@@ -1,6 +1,11 @@
 /** Shared public types grouped by the owning application domain. */
 export type Risk = "low" | "medium" | "high";
 export type PermissionDecision = "allow-once" | "allow-session" | "deny";
+/** Host-issued write scope. A local grant never carries a hostKey. */
+export type ExternalFilesystemAccess = {
+  kind: "filesystem-write";
+  hostKey?: string;
+};
 /** Permission mode (D115): how high-risk tool calls are approved.
  * `inherit` (sessions only) falls back to the global default. */
 export const PERMISSION_MODES = ["inherit", "ask", "accept-edits", "auto"] as const;

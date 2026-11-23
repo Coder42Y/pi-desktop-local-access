@@ -1533,6 +1533,19 @@
       "nestedParentToolCallId": {
         "type": "string"
       },
+      "externalAccess": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "filesystem-write"
+          },
+          "hostKey": {
+            "type": "string"
+          }
+        }
+      },
       "title": {
         "type": "string"
       },

@@ -26,6 +26,17 @@ describe("owner workspace tools", () => {
     await tools.execute(input(link), { ...owner, deviceId: "another-device" });
     expect(calls[1]?.params.sessionId).not.toBe(calls[0]?.params.sessionId);
   });
+  it("forwards only a top-level external write grant and strips the same flag from model args", async () => {
+    const dir = await directory();
+    const calls: Array<Record<string, unknown>> = [];
+    const host: HostRpc = { async call<T>(method: string, params: Record<string, unknown> = {}) { calls.push(params); return { ok: true, content: "x" } as T; } };
+    const tools = createWorkspaceTools(() => host);
+    await tools.execute({ ...input(dir), toolName: "Write", toolCallId: "write-1", args: { path: "/outside/file", content: "x", allowExternalWrites: true } }, owner);
+    expect(calls[0]?.allowExternalWrites).not.toBe(true);
+    expect((calls[0]?.args as Record<string, unknown>).allowExternalWrites).toBeUndefined();
+    await tools.execute({ ...input(dir), toolName: "Write", toolCallId: "write-2", args: { path: "/outside/file", content: "x" }, allowExternalWrites: true }, { ...owner, deviceId: "grant-device" });
+    expect(calls[1]?.allowExternalWrites).toBe(true);
+  });
   it("rejects unknown tools, relative paths, oversized args and unavailable roots without RPC", async () => {
     let calls = 0;
     const host: HostRpc = { async call<T>() { calls++; return {} as T; } };

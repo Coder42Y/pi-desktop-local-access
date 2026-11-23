@@ -789,8 +789,11 @@ export class AgentHost {
     const remembered = this.approvals.result(response.approvalId);
     if (!request && !remembered) throw racpError("NOT_FOUND", `approval ${response.approvalId} is not open`);
     const state = this.state((request ?? { sessionId: this.sessionOfResult(response.approvalId) }).sessionId);
-    if (response.decision === "allow-session" && !this.allowRemoteSessionGrants && !principal.pairedDevice) {
+    const pairedOwnerFilesystemGrant = request?.externalAccess?.kind === "filesystem-write"
+      && principal.pairedDevice === true && principal.roles.includes("owner");
+    if (response.decision === "allow-session" && !this.allowRemoteSessionGrants && !principal.pairedDevice && !pairedOwnerFilesystemGrant) {
       throw racpError("FORBIDDEN", "remote session grants are not allowed by Host policy");
+    }
     }
     const result = await this.approvals.resolve(response, principal, state.revision + 1);
     if (!result.alreadyResolved) {

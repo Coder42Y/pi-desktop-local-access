@@ -147,6 +147,7 @@ export const WorkspaceToolExecuteSchema = Type.Object({
   timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 21_600_000 })),
   expectedCommandShellId: Type.Optional(Type.String({ minLength: 1, maxLength: 256 })),
   expectedCommandShellDialect: Type.Optional(Type.Union([Type.Literal("posix"), Type.Literal("powershell"), Type.Literal("cmd")])),
+  allowExternalWrites: Type.Optional(Type.Boolean()),
 }, { additionalProperties: false });
 export type WorkspaceToolExecute = Static<typeof WorkspaceToolExecuteSchema>;
 export const WorkspaceToolAbortSchema = Type.Object({
@@ -326,6 +327,10 @@ export const RacpApprovalRequestSchema = Type.Object({
   agentName: Type.Optional(Type.String()),
   parentToolCallId: Type.Optional(Type.String()),
   nestedParentToolCallId: Type.Optional(Type.String()),
+  externalAccess: Type.Optional(Type.Object({
+    kind: Type.Literal("filesystem-write"),
+    hostKey: Type.Optional(Type.String()),
+  })),
   title: Type.Optional(Type.String()),
   question: Type.Optional(Type.String()),
   artifact: Type.Optional(

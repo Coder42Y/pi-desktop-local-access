@@ -618,6 +618,12 @@ async fn review_rpc_records_workspace_scratch_and_approved_external_write_edit()
         json!({"id":f.session,"mode":"agent","permissionMode":"auto"}),
     )
     .await;
+    {
+        let mut st = f.state.lock().await;
+        let key = crate::permissions::external_access::ExternalAccess::filesystem_write(None)
+            .grant_key();
+        st.session_grants.entry(f.session.clone()).or_default().push(key);
+    }
     f.user("outside-round", None).await;
     let outside = tempdir().unwrap();
     let scratch = crate::scratch::session_dir(f.data.path(), &f.session).unwrap();
@@ -629,7 +635,12 @@ async fn review_rpc_records_workspace_scratch_and_approved_external_write_edit()
     ];
     for (index, (kind, target)) in targets.iter().enumerate() {
         let id = format!("write-{index}");
-        let write = f.call("tools.execute", json!({"toolCallId":id,"toolName":"Write","args":{"path":target.to_string_lossy(),"content":"before\n"},"mode":"agent"})).await;
+        let tool_path = if *kind == "workspace" {
+            "same.txt".to_string()
+        } else {
+            target.to_string_lossy().into_owned()
+        };
+        let write = f.call("tools.execute", json!({"toolCallId":id,"toolName":"Write","args":{"path":tool_path,"content":"before\n"},"mode":"agent"})).await;
         assert_eq!(write["ok"], true, "{write}");
         assert_eq!(write["content"]["root"], *kind);
         let review = &write["content"]["review"];
@@ -649,7 +660,7 @@ async fn review_rpc_records_workspace_scratch_and_approved_external_write_edit()
         assert_eq!(review["reversible"], *kind == "workspace");
         f.append(json!({"id":id,"role":"tool","content":"","createdAt":"2026-10-20T00:00:01Z","toolName":"Write","toolCallId":id,"toolStatus":"success","toolResult":{"details":write["content"]}}),None).await;
         let edit_id = format!("edit-{index}");
-        let edit = f.call("tools.execute", json!({"toolCallId":edit_id,"toolName":"Edit","args":{"path":target.to_string_lossy(),"tag":write["content"]["tag"],"ops":"PUT 1.=1:\n+after\n"},"mode":"agent"})).await;
+        let edit = f.call("tools.execute", json!({"toolCallId":edit_id,"toolName":"Edit","args":{"path":tool_path,"tag":write["content"]["tag"],"ops":"PUT 1.=1:\n+after\n"},"mode":"agent"})).await;
         assert_eq!(edit["ok"], true, "{edit}");
         assert!(
             edit["content"]["review"].is_object(),

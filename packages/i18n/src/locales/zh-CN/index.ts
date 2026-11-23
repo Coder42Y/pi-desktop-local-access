@@ -2329,6 +2329,10 @@ sklm: {
     allowPrompt: "允许 <highlight>{{tool}}</highlight> 运行吗？",
     allowOnce: "允许一次",
     allowSession: "允许本次对话",
+    externalWriteScope: "授权当前对话及其子智能体在下方所示本机或 SSH 主机上修改、写入或删除当前工作区外的任意可访问文件。本次一次性授权覆盖本对话后续的 Write/Edit/Bash 操作，不再重复询问；不适用于其他对话。",
+    externalWriteLocalHost: "目标：本机",
+    externalWriteRemoteHost: "目标：SSH 主机",
+    externalWriteGrant: "授权本次对话访问工作区外文件",
     deny: "拒绝",
     risk: {
       high: "高风险",

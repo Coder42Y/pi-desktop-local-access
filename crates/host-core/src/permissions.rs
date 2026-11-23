@@ -4,6 +4,8 @@ use uuid::Uuid;
 
 use crate::db::{ms_to_ts, now_ms};
 
+pub mod external_access;
+use external_access::ExternalAccess;
 /// Longest string leaf kept in a permission request's args preview. Full args
 /// (e.g. a Write's whole file content) would otherwise cross every stdio/IPC
 /// hop and stall the renderer right as the dialog opens.
@@ -62,6 +64,8 @@ pub struct PermissionRequest {
     pub reason: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub command_shell_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_access: Option<ExternalAccess>,
 }
 
 pub struct PermissionRequestParams<'a> {
@@ -72,6 +76,7 @@ pub struct PermissionRequestParams<'a> {
     pub reason: &'a str,
     pub declared_risk: Option<&'a str>,
     pub command_shell_id: Option<&'a str>,
+    pub external_access: Option<ExternalAccess>,
 }
 
 pub struct PermissionEvaluationParams<'a> {
@@ -82,6 +87,7 @@ pub struct PermissionEvaluationParams<'a> {
     pub session_grants: &'a HashMap<String, Vec<String>>,
     pub declared_risk: Option<&'a str>,
     pub requires_external_path_permission: bool,
+    pub external_host_key: Option<&'a str>,
     pub plan_safe_actions: Option<&'a [String]>,
 }
 
@@ -172,6 +178,7 @@ impl PermissionManager {
             session_grants,
             declared_risk: None,
             requires_external_path_permission: false,
+            external_host_key: None,
             plan_safe_actions: None,
         })
     }
@@ -184,10 +191,8 @@ impl PermissionManager {
         self.evaluate_auto_with_permission_mode_and_risk_and_path(params)
     }
 
-    /// Evaluate a tool that explicitly targets a path outside the session's
-    /// workspace and scratch roots. Outside-path access is an exception to the
-    /// normal low-risk auto-allow rule: `auto` allows it, while every other
-    /// mode needs a card (unless the session already granted this tool).
+    /// External mutations and every shell call require explicit session/host
+    /// consent, independent of Auto and ordinary per-tool grants.
     pub fn evaluate_auto_with_permission_mode_and_risk_and_path(
         &self,
         params: PermissionEvaluationParams<'_>,
@@ -200,6 +205,7 @@ impl PermissionManager {
             session_grants,
             declared_risk,
             requires_external_path_permission,
+            external_host_key,
             plan_safe_actions,
         } = params;
         // The contract modes' tool allowlist is authoritative. This check
@@ -229,18 +235,14 @@ impl PermissionManager {
             }
         }
 
-        if requires_external_path_permission {
-            if permission_mode == "auto" {
-                return Some(PermissionDecision::AllowOnce);
-            }
-            if session_grants
-                .get(session_id)
-                .map(|g| g.iter().any(|t| t == tool_name))
-                .unwrap_or(false)
-            {
-                return Some(PermissionDecision::AllowSession);
-            }
-            return None;
+        // Reads are unrestricted by the app. Shell text is never proof of
+        // read-only execution: every Bash needs explicit host-scoped consent.
+        if matches!(tool_name, "Read" | "Glob" | "Grep") {
+            return Some(PermissionDecision::AllowOnce);
+        }
+        if tool_name == "Bash" || requires_external_path_permission {
+            return external_access::has_grant(session_grants, session_id, external_host_key)
+                .then_some(PermissionDecision::AllowSession);
         }
 
         let risk = Self::tool_risk_with_declared(tool_name, declared_risk);
@@ -285,6 +287,7 @@ impl PermissionManager {
             reason,
             declared_risk: None,
             command_shell_id: None,
+            external_access: None,
         })
     }
 
@@ -303,6 +306,7 @@ impl PermissionManager {
             reason,
             declared_risk,
             command_shell_id,
+            external_access,
         } = params;
         let request_id = Uuid::new_v4().to_string();
         let request = PermissionRequest {
@@ -314,6 +318,7 @@ impl PermissionManager {
             args_preview: preview_value(&args_preview),
             reason: reason.to_string(),
             command_shell_id: command_shell_id.map(str::to_string),
+            external_access,
         };
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.next_sequence += 1;
@@ -483,7 +488,7 @@ mod tests {
     #[test]
     fn auto_allows_all_high_risk_in_agent_mode() {
         let pm = PermissionManager::default();
-        for tool in ["Write", "Edit", "Bash", "plugin_x_run"] {
+        for tool in ["Write", "Edit", "plugin_x_run"] {
             let d = pm.evaluate_auto_with_permission_mode("s", tool, "agent", "auto", &no_grants());
             assert!(
                 matches!(d, Some(PermissionDecision::AllowOnce)),
@@ -526,16 +531,15 @@ mod tests {
     }
 
     #[test]
-    fn plan_bash_follows_permission_mode() {
+    fn plan_bash_requires_filesystem_grant_even_in_auto() {
         let pm = PermissionManager::default();
-        assert_eq!(
-            pm.evaluate_auto_with_permission_mode("s", "Bash", "plan", "ask", &no_grants()),
-            None
-        );
-        assert_eq!(
-            pm.evaluate_auto_with_permission_mode("s", "Bash", "plan", "auto", &no_grants()),
-            Some(PermissionDecision::AllowOnce)
-        );
+        for mode in ["ask", "auto"] {
+            assert_eq!(
+                pm.evaluate_auto_with_permission_mode("s", "Bash", "plan", mode, &no_grants()),
+                None,
+                "{mode}"
+            );
+        }
     }
 
     #[test]
@@ -578,7 +582,7 @@ mod tests {
         );
         assert_eq!(
             pm.evaluate_auto_with_permission_mode("s", "Bash", "goal", "auto", &no_grants()),
-            Some(PermissionDecision::AllowOnce)
+            None
         );
     }
 
@@ -634,11 +638,10 @@ mod tests {
         }
         assert!(!PermissionManager::plan_mode_allows("TodoWrite"));
     }
-
     #[test]
-    fn external_paths_prompt_for_low_risk_tools_outside_auto() {
+    fn external_reads_are_unrestricted_in_every_permission_mode() {
         let pm = PermissionManager::default();
-        for mode in ["ask", "accept-edits"] {
+        for mode in ["ask", "accept-edits", "auto"] {
             let decision = pm.evaluate_auto_with_permission_mode_and_risk_and_path(
                 PermissionEvaluationParams {
                     session_id: "s",
@@ -648,53 +651,75 @@ mod tests {
                     session_grants: &no_grants(),
                     declared_risk: None,
                     requires_external_path_permission: true,
+                    external_host_key: None,
                     plan_safe_actions: None,
                 },
             );
-            assert_eq!(
-                decision, None,
-                "Read outside workspace must prompt in {mode}"
-            );
+            assert_eq!(decision, Some(PermissionDecision::AllowOnce), "{mode}");
         }
-        let auto =
-            pm.evaluate_auto_with_permission_mode_and_risk_and_path(PermissionEvaluationParams {
-                session_id: "s",
-                tool_name: "Read",
-                mode: "agent",
-                permission_mode: "auto",
-                session_grants: &no_grants(),
-                declared_risk: None,
-                requires_external_path_permission: true,
-                plan_safe_actions: None,
-            });
-        assert_eq!(auto, Some(PermissionDecision::AllowOnce));
     }
 
     #[test]
-    fn external_path_session_grant_still_applies() {
+    fn stale_tool_grant_cannot_authorize_external_writes_or_bash() {
         let pm = PermissionManager::default();
         let mut grants = HashMap::new();
-        grants.insert("s".to_string(), vec!["Grep".to_string()]);
-        let decision =
-            pm.evaluate_auto_with_permission_mode_and_risk_and_path(PermissionEvaluationParams {
+        grants.insert("s".to_string(), vec!["Write".to_string(), "Bash".to_string()]);
+        for (tool, external) in [("Write", true), ("Bash", false)] {
+            let decision = pm.evaluate_auto_with_permission_mode_and_risk_and_path(
+                PermissionEvaluationParams {
+                    session_id: "s",
+                    tool_name: tool,
+                    mode: "agent",
+                    permission_mode: "auto",
+                    session_grants: &grants,
+                    declared_risk: None,
+                    requires_external_path_permission: external,
+                    external_host_key: None,
+                    plan_safe_actions: None,
+                },
+            );
+            assert_eq!(decision, None, "{tool}");
+        }
+        grants.insert(
+            "s".to_string(),
+            vec![external_access::ExternalAccess::filesystem_write(None).grant_key()],
+        );
+        let allowed = pm.evaluate_auto_with_permission_mode_and_risk_and_path(
+            PermissionEvaluationParams {
                 session_id: "s",
-                tool_name: "Grep",
-                mode: "plan",
+                tool_name: "Bash",
+                mode: "agent",
                 permission_mode: "ask",
                 session_grants: &grants,
                 declared_risk: None,
-                requires_external_path_permission: true,
+                requires_external_path_permission: false,
+                external_host_key: None,
                 plan_safe_actions: None,
-            });
-        assert_eq!(decision, Some(PermissionDecision::AllowSession));
+            },
+        );
+        assert_eq!(allowed, Some(PermissionDecision::AllowSession));
+        let other_host = pm.evaluate_auto_with_permission_mode_and_risk_and_path(
+            PermissionEvaluationParams {
+                session_id: "s",
+                tool_name: "Write",
+                mode: "agent",
+                permission_mode: "auto",
+                session_grants: &grants,
+                declared_risk: None,
+                requires_external_path_permission: true,
+                external_host_key: Some("ssh-other"),
+                plan_safe_actions: None,
+            },
+        );
+        assert_eq!(other_host, None);
     }
 
     #[test]
     fn session_grants_still_apply_under_ask() {
         let pm = PermissionManager::default();
         let mut grants = HashMap::new();
-        grants.insert("s".to_string(), vec!["Bash".to_string()]);
-        let d = pm.evaluate_auto_with_permission_mode("s", "Bash", "agent", "ask", &grants);
+        grants.insert("s".to_string(), vec!["Write".to_string()]);
+        let d = pm.evaluate_auto_with_permission_mode("s", "Write", "agent", "ask", &grants);
         assert_eq!(d, Some(PermissionDecision::AllowSession));
     }
 
@@ -731,6 +756,7 @@ mod tests {
                         session_grants: &no_grants(),
                         declared_risk: declared,
                         requires_external_path_permission: false,
+                        external_host_key: None,
                         plan_safe_actions: None,
                     });
                 assert!(
@@ -800,6 +826,7 @@ mod tests {
                 session_grants: &no_grants(),
                 declared_risk: None,
                 requires_external_path_permission: false,
+                external_host_key: None,
                 plan_safe_actions: None,
             });
         assert_eq!(denied, Some(PermissionDecision::Deny));
@@ -814,6 +841,7 @@ mod tests {
                 session_grants: &no_grants(),
                 declared_risk: None,
                 requires_external_path_permission: false,
+                external_host_key: None,
                 plan_safe_actions: Some(&empty),
             });
         assert_eq!(empty_denied, Some(PermissionDecision::Deny));
@@ -828,6 +856,7 @@ mod tests {
                 session_grants: &no_grants(),
                 declared_risk: None,
                 requires_external_path_permission: false,
+                external_host_key: None,
                 plan_safe_actions: Some(&actions),
             });
         assert_eq!(admitted, Some(PermissionDecision::AllowOnce));

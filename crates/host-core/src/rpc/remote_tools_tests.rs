@@ -245,6 +245,31 @@ async fn workspace_bash_requires_matching_shell_and_honors_abort_before_dispatch
 }
 
 #[tokio::test]
+async fn workspace_bash_without_write_grant_does_not_run() {
+    let (dir, state, tx, _rx) = fixture();
+    let shell = crate::tools::shell::default_shell_id();
+    let result = handle_request(
+        state.clone(),
+        "tools.workspaceExecute",
+        json!({
+            "path": dir.path(),
+            "sessionId": "local-owner",
+            "toolCallId": "bash-denied",
+            "toolName": "Bash",
+            "args": { "command": "printf forbidden > should-not-exist" },
+            "expectedCommandShellId": shell,
+            "expectedCommandShellDialect": crate::tools::shell::dialect_for_id(shell),
+        }),
+        tx,
+    )
+    .await
+    .unwrap();
+    assert_eq!(result["errorCode"], "TOOL_DENIED");
+    assert!(!dir.path().join("should-not-exist").exists());
+    assert!(state.lock().await.active_bash_cancellations.is_empty());
+}
+
+#[tokio::test]
 async fn remote_group_binding_names_and_memory_survive_reopen() {
     let (dir, state, tx, _rx) = fixture();
     let (path, _id) = create(&state, &tx).await;

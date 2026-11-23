@@ -41,8 +41,12 @@ export function createWorkspaceTools(getHost: () => HostRpc | null): NonNullable
         const path = await realpath(input.path).catch(() => undefined);
         if (!path || !(await stat(path)).isDirectory()) throw new RacpError("REMOTE_PATH_NOT_FOUND", "workspace directory is unavailable");
         if (entry.cancelled || getHost() !== host) throw unavailable();
+        const { allowExternalWrites, ...request } = input;
+        const args = { ...request.args };
+        delete args.allowExternalWrites;
         const result = await host.call<WorkspaceToolResult>("tools.workspaceExecute", {
-          ...input, path, sessionId: entry.sessionId,
+          ...request, args, path, sessionId: entry.sessionId,
+          ...(allowExternalWrites === true ? { allowExternalWrites: true } : {}),
         });
         if (entry.cancelled || getHost() !== host) throw unavailable();
         if (!result || typeof result.ok !== "boolean" || !Object.hasOwn(result, "content")

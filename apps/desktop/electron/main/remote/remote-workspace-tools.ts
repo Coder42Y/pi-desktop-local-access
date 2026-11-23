@@ -8,12 +8,14 @@ export type RemoteWorkspaceToolRequest = {
   toolName: string;
   args: unknown;
   remoteWorkspace: { hostKey: string; path: string };
+  allowExternalWrites?: boolean;
   timeoutMs?: number;
   expectedCommandShellId?: string;
   expectedCommandShellDialect?: string;
 };
-
 type HostReply = { call(method: string, params: Record<string, unknown>): Promise<unknown> };
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
 type Dependencies = {
   getBoot: () => RemoteHostsBoot | null;
   isCurrent: () => boolean;
@@ -50,9 +52,12 @@ export function createRemoteWorkspaceToolRelay(host: HostReply, deps: Dependenci
         if (active.has(key)) throw new Error("duplicate remote tool dispatch");
         active.set(key, request);
         ownsActive = true;
+        const args = isRecord(request.args) ? { ...request.args } : request.args;
+        if (isRecord(args)) delete args.allowExternalWrites;
         result = await boot.executeWorkspaceTool({ ...request.remoteWorkspace,
           sessionId: request.sessionId, turnId: request.turnId, toolCallId: request.toolCallId,
-          toolName: request.toolName, args: request.args,
+          toolName: request.toolName, args,
+          ...(request.allowExternalWrites === true ? { allowExternalWrites: true } : {}),
           ...(typeof request.timeoutMs === "number" ? { timeoutMs: request.timeoutMs } : {}),
           ...(request.expectedCommandShellId ? { expectedCommandShellId: request.expectedCommandShellId } : {}),
           ...(request.expectedCommandShellDialect ? { expectedCommandShellDialect: request.expectedCommandShellDialect } : {}),

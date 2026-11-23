@@ -56,6 +56,9 @@ export function PermissionCard({
     [permission.argsPreview, permission.toolName],
   );
   const risk = (permission.risk || "high") as "low" | "medium" | "high";
+  const externalAccess = permission.externalAccess?.kind === "filesystem-write"
+    ? permission.externalAccess
+    : undefined;
 
   return (
     <section
@@ -88,7 +91,16 @@ export function PermissionCard({
           components={{ highlight: <span className="text-text-primary" /> }}
         />
       </div>
-      {permission.reason ? (
+      {externalAccess ? (
+        <div className="permission-card-reason">
+          <div>{t("permission.externalWriteScope")}</div>
+          <div>
+            {externalAccess.hostKey !== undefined
+              ? <>{t("permission.externalWriteRemoteHost")} {externalAccess.hostKey}</>
+              : t("permission.externalWriteLocalHost")}
+          </div>
+        </div>
+      ) : permission.reason ? (
         <div className="permission-card-reason">{permission.reason}</div>
       ) : null}
       {argBlocks.length > 0 ? (
@@ -112,14 +124,14 @@ export function PermissionCard({
           {t("permission.deny")}
         </Button>
         <Button
-          variant="secondary"
+          variant={externalAccess ? "primary" : "secondary"}
           disabled={resolving}
           onClick={() => void resolve("allow-session")}
         >
-          {t("permission.allowSession")}
+          {externalAccess ? t("permission.externalWriteGrant") : t("permission.allowSession")}
         </Button>
         <Button
-          variant="primary"
+          variant={externalAccess ? "secondary" : "primary"}
           disabled={resolving}
           onClick={() => void resolve("allow-once")}
         >
