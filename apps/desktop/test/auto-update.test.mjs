@@ -115,9 +115,11 @@ test("updater gates delivery mode by platform and delivery policy", () => {
   assert.match(updaterSource, /if \(!preferenceChanged\) return/);
   assert.match(
     updaterSource,
-    /allowPrerelease = false/,
-    "prerelease installs must still track the stable GitHub latest release",
+    /updateProvider: LocalUpdateProvider/,
+    "fork builds must stay on the local update provider",
   );
+  assert.match(updaterSource, /allowPrerelease = true/);
+  assert.match(updaterSource, /allowDowngrade = false/);
   assert.match(updaterSource, /quitAndInstall/);
   assert.match(
     updaterSource,
@@ -141,7 +143,7 @@ test("updater gates delivery mode by platform and delivery policy", () => {
   assert.match(updaterSource, /autoUpdater\.on\("error"/);
   assert.match(
     updaterSource,
-    /github\.com\/vastsa\/PI-Desktop\/releases/,
+    /github\.com\/Coder42Y\/pi-desktop-local-access\/releases/,
     "releases fallback URL",
   );
   assert.match(
@@ -257,8 +259,10 @@ test("packaging publishes an electron-updater feed for GitHub Releases", async (
   const pkg = JSON.parse(pkgSource);
   assert.ok(pkg.dependencies["electron-updater"], "electron-updater dependency");
   assert.equal(pkg.build.publish[0].provider, "github");
-  assert.equal(pkg.build.publish[0].owner, "vastsa");
-  assert.equal(pkg.build.publish[0].repo, "PI-Desktop");
+  assert.equal(pkg.build.publish[0].owner, "Coder42Y");
+  assert.equal(pkg.build.publish[0].repo, "pi-desktop-local-access");
+  assert.equal(pkg.build.publish[0].channel, "local");
+  assert.equal(pkg.build.publish[0].private, false);
   const windowsUpdateConfigResource = pkg.build.win.extraResources.find(
     ({ from }) => from === "resources/app-update.yml",
   );
@@ -282,6 +286,8 @@ test("packaging publishes an electron-updater feed for GitHub Releases", async (
     provider: pkg.build.publish[0].provider,
     owner: pkg.build.publish[0].owner,
     repo: pkg.build.publish[0].repo,
+    channel: pkg.build.publish[0].channel,
+    private: String(pkg.build.publish[0].private),
     updaterCacheDirName: `${pkg.name.replaceAll("/", "")}-updater`,
   });
   const macTargets = pkg.build.mac.target.map((entry) => entry.target);

@@ -2,9 +2,9 @@
  * App auto-update via electron-updater against GitHub Releases.
  *
  * The feed (latest*.yml + installers) is attached to each GitHub Release by
- * .github/workflows/release.yml. Discovery always tracks the latest stable
- * release (`allowPrerelease = false`) so RC installs still graduate to newer
- * stables. Delivery mode per install:
+ * the fork release workflow. This build tracks only the anonymous `local`
+ * prerelease channel in Coder42Y/pi-desktop-local-access, never upstream.
+ * Delivery mode per install:
  *  - Windows NSIS / Linux AppImage / packaged macOS → full in-app flow: silent
  *    background download, "restart to update" prompt, install-on-quit fallback.
  *  - Windows ZIP / legacy portable (`piDistribution = "zip"` or
@@ -51,6 +51,8 @@ import {
   type WindowsDistribution,
 } from "./update-policy";
 import { ManualUpdateReminderTracker } from "./manual-update-reminder";
+import { LocalUpdateProvider } from "./local-update-provider";
+import { CUSTOM_UPDATE_FEED } from "./custom-update";
 
 export { resolveUpdateMode } from "./update-policy";
 export type { WindowsDistribution } from "./update-policy";
@@ -72,7 +74,7 @@ function createRelocatedUpdater(
   return platform === "win32" ? new RelocatedNsisUpdater(baseCachePath) : null;
 }
 
-export const RELEASES_URL = "https://github.com/vastsa/PI-Desktop/releases/latest";
+export const RELEASES_URL = "https://github.com/Coder42Y/pi-desktop-local-access/releases";
 
 const AUTO_CHECK_INITIAL_DELAY_MS = 15_000;
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -460,12 +462,16 @@ export class AppUpdaterController {
     // Do not let cached updates download or install before Host preferences load.
     this.autoUpdater.autoDownload = false;
     this.autoUpdater.autoInstallOnAppQuit = false;
-    // electron-updater defaults allowPrerelease=true when the installed
-    // version has a prerelease component (e.g. 0.2.0-rc.6). That pins the
-    // GitHub provider to the same custom channel ("rc") and never offers a
-    // newer stable release such as 0.2.2. Always track GitHub's latest
-    // stable release so RC installs can graduate to stable.
-    this.autoUpdater.allowPrerelease = false;
+    // The custom channel uses semver tags vX.Y.Z-local.N. private:false ignores
+    // GH_TOKEN/GITHUB_TOKEN; no credentials enter the app. Never fall back to
+    // upstream latest.yml.
+    this.autoUpdater.setFeedURL({
+      provider: "custom",
+      updateProvider: LocalUpdateProvider,
+    });
+    this.autoUpdater.channel = CUSTOM_UPDATE_FEED.channel;
+    this.autoUpdater.allowPrerelease = true;
+    this.autoUpdater.allowDowngrade = false;
     // Only automatic mode may install on quit; manual mode never hands an
     // installer a no-install/portable directory.
     this.autoUpdater.logger = {
