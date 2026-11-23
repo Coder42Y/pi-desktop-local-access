@@ -1,5 +1,5 @@
 import type { SessionCapabilities } from "@pi-desktop/shared";
-import { sessionAllows } from "../lib/remote-session-safety";
+import { canReadFilePreviews, sessionAllows } from "../lib/remote-session-safety";
 import { useSlotSessionId } from "../plugins/renderer-slots/use-slots";
 import { useAppStore } from "../stores/app-store";
 
@@ -13,6 +13,16 @@ export function useChatSessionCapability(capability: keyof SessionCapabilities):
         (id?.startsWith("remote:") ? { id } : undefined),
       capability,
     );
+  });
+}
+
+/** File previews can use a remote read capability without local tool access. */
+export function useChatFilePreviewCapability(): boolean {
+  const paneSessionId = useSlotSessionId();
+  return useAppStore((state) => {
+    const id = paneSessionId || state.activeSessionId;
+    return canReadFilePreviews(state.sessions.find((session) => session.id === id)
+      ?? (id?.startsWith("remote:") ? { id } : undefined));
   });
 }
 

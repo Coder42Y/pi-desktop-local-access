@@ -20,12 +20,15 @@ describe("sessionless SSH file views", () => {
     expect(resolved).toMatchObject({ match: { relativePath: "src/main.ts", root: "workspace", absolutePath: join(await realpath(path), "src", "main.ts") } });
     expect(await files.read({ path, operation: "read", ref: "src/main.ts" })).toEqual({ kind: "text", content: "remote source", size: 13 });
   });
-  it("does not fall back to this computer or cross symlink containment", async () => {
+  it("previews an explicit absolute file and still contains relative escapes", async () => {
     const path = await fixture(); const outside = await fixture(); const files = createWorkspaceFiles();
-    await symlink(join(outside, "src", "main.ts"), join(path, "escaped.ts"));
-    await expect(files.read({ path, operation: "read", ref: join(outside, "src", "main.ts") })).rejects.toMatchObject({ code: "REMOTE_PATH_FORBIDDEN" });
+    const external = join(outside, "src", "main.ts");
+    await symlink(external, join(path, "escaped.ts"));
+    expect(await files.read({ path, operation: "read", ref: external })).toEqual({ kind: "text", content: "remote source", size: 13 });
+    expect(await files.read({ path, operation: "resolve", ref: external })).toMatchObject({ match: { absolutePath: await realpath(external), matchedBy: "exact-absolute" } });
     await expect(files.read({ path, operation: "read", ref: "escaped.ts" })).rejects.toMatchObject({ code: "REMOTE_PATH_FORBIDDEN" });
-    expect(await files.read({ path, operation: "resolve", ref: join(outside, "src", "main.ts") })).toEqual({ match: null, reason: "outside-allowed-roots" });
+    expect(await files.read({ path, operation: "index" })).not.toMatchObject({ entries: expect.arrayContaining([expect.objectContaining({ path: external })]) });
+  });
   });
   it("supports canonical root aliases and refuses nonexistent/nonabsolute roots", async () => {
     const path = await fixture(); const link = `${path}-link`; dirs.push(link); await symlink(path, link);
