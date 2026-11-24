@@ -466,6 +466,7 @@ export function Composer({
     recordHistory: inputHistory.record,
     draft: {
       ref,
+      quotes: draft.quotes,
       draftSnapshot,
       draftRevision,
       clearDraftForKey,
