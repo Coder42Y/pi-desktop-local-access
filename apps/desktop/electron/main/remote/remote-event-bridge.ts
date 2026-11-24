@@ -122,7 +122,6 @@ function toToolPermissionRequest(
     ...(approval.nestedParentToolCallId ? { nestedParentToolCallId: approval.nestedParentToolCallId } : {}),
   };
 }
-}
 
 function toAskToolRequest(
   remoteSessionId: string,
