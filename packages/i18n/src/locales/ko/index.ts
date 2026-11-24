@@ -230,6 +230,8 @@ export const ko = {
     manualHint: "릴리스 페이지에서 새 버전을 다운로드하세요.",
     error: "업데이트를 확인할 수 없습니다: {{message}}",
     dismiss: "닫기",
+    actionFailed: "업데이트를 설치하지 못했습니다.",
+    checkFailed: "업데이트를 확인하지 못했습니다.",
     devDisabled: "개발 빌드에서는 업데이트가 비활성화됩니다.",
     cardDesc: "PI-Desktop를 최신 상태로 유지하여 수정 사항과 새로운 기능을 받아보세요.",
     backgroundLabel: "백그라운드에서 다운로드 중",

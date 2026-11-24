@@ -15,7 +15,7 @@ type UseComposerInputHistoryOptions = {
   referenceSessionId: string;
   draft: Pick<
     ComposerDraftController,
-    "readLiveDraft" | "fileReferencesRef" | "applyEditorDraft" | "draftRevision"
+    "readLiveDraft" | "fileReferencesRef" | "applyEditorDraft" | "draftRevision" | "quotes" | "setQuotes"
   >;
 };
 

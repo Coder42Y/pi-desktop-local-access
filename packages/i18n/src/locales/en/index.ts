@@ -228,6 +228,8 @@ export const en = {
     manualHint: "Download the new version from the releases page.",
     error: "Couldn't check for updates: {{message}}",
     dismiss: "Dismiss",
+    actionFailed: "Couldn't install the update.",
+    checkFailed: "Couldn't check for updates.",
     devDisabled: "Updates are disabled in development builds.",
     cardDesc: "Keep PI-Desktop up to date for the latest fixes and features.",
     backgroundLabel: "Downloading in the background",

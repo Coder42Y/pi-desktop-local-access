@@ -223,6 +223,8 @@ export const zhTW = {
     manualHint: "請前往釋出頁下載新版本。",
     error: "檢查更新失敗：{{message}}",
     dismiss: "忽略",
+    actionFailed: "無法安裝更新。",
+    checkFailed: "無法檢查更新。",
     devDisabled: "開發版本不支援自動更新。",
     cardDesc: "保持 PI-Desktop 為最新版本，以取得修復與新功能。",
     backgroundLabel: "正在背景下載",

@@ -223,6 +223,8 @@ export const zhCN = {
     manualHint: "请前往发布页下载新版本。",
     error: "检查更新失败：{{message}}",
     dismiss: "忽略",
+    actionFailed: "无法安装更新。",
+    checkFailed: "无法检查更新。",
     devDisabled: "开发版本不支持自动更新。",
     cardDesc: "保持 PI-Desktop 为最新版本，以获取修复与新功能。",
     backgroundLabel: "正在后台下载",

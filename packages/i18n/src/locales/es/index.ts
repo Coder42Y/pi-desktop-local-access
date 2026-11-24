@@ -221,6 +221,8 @@ export const es = {
     "manualHint": "Descargue la nueva versión desde la página de lanzamientos.",
     "error": "No se pudieron buscar actualizaciones: {{message}}",
     "dismiss": "Descartar",
+    "actionFailed": "No se pudo instalar la actualización.",
+    "checkFailed": "No se pudo buscar actualizaciones.",
     "devDisabled": "Las actualizaciones están deshabilitadas en las compilaciones de desarrollo.",
     "cardDesc": "Mantén PI-Desktop actualizado para recibir correcciones y funciones nuevas.",
     "backgroundLabel": "Descargando en segundo plano",

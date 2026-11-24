@@ -221,6 +221,8 @@ export const fr = {
     "manualHint": "Téléchargez la nouvelle version à partir de la page des versions.",
     "error": "Impossible de vérifier les mises à jour : {{message}}",
     "dismiss": "Ignorer",
+    "actionFailed": "Impossible d'installer la mise à jour.",
+    "checkFailed": "Impossible de vérifier les mises à jour.",
     "devDisabled": "Les mises à jour sont désactivées dans les versions de développement.",
     "cardDesc": "Gardez PI-Desktop à jour pour bénéficier des correctifs et des nouvelles fonctionnalités.",
     "backgroundLabel": "Téléchargement en arrière-plan",

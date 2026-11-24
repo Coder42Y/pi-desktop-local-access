@@ -220,6 +220,8 @@ export const ptBR = {
     manualHint: "Baixe a nova versão na página de lançamentos.",
     error: "Não foi possível verificar atualizações: {{message}}",
     dismiss: "Dispensar",
+    actionFailed: "Não foi possível instalar a atualização.",
+    checkFailed: "Não foi possível verificar atualizações.",
     devDisabled: "As atualizações estão desativadas em compilações de desenvolvimento.",
     cardDesc: "Mantenha o PI-Desktop atualizado para receber correções e novos recursos.",
     backgroundLabel: "Baixando em segundo plano",

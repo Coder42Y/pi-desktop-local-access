@@ -221,6 +221,8 @@ export const de = {
     "manualHint": "Laden Sie die neue Version von der Release-Seite herunter.",
     "error": "Konnte nicht nach Updates suchen: {{message}}",
     "dismiss": "Verwerfen",
+    "actionFailed": "Das Update konnte nicht installiert werden.",
+    "checkFailed": "Es konnte nicht nach Updates gesucht werden.",
     "devDisabled": "Updates sind in Entwicklungs-Builds deaktiviert.",
     "cardDesc": "Halten Sie PI-Desktop aktuell, um Korrekturen und neue Funktionen zu erhalten.",
     "backgroundLabel": "Wird im Hintergrund heruntergeladen",

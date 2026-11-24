@@ -230,6 +230,8 @@ export const tr = {
     manualHint: "Yeni sürümü yayınlar sayfasından indirin.",
     error: "Güncellemeler denetlenemedi: {{message}}",
     dismiss: "Kapat",
+    actionFailed: "Güncelleme yüklenemedi.",
+    checkFailed: "Güncellemeler denetlenemedi.",
     devDisabled: "Geliştirme derlemelerinde güncellemeler kapalıdır.",
     cardDesc: "Düzeltmeler ve yeni özellikler için PI-Desktop'u güncel tutun.",
     backgroundLabel: "Arka planda indiriliyor",

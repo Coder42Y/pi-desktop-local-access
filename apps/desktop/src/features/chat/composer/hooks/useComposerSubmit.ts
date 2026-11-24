@@ -45,6 +45,7 @@ type UseComposerSubmitOptions = {
     | "draftRevision"
     | "clearDraftForKey"
     | "restoreDraftForKey"
+    | "quotes"
   >;
 };
 
