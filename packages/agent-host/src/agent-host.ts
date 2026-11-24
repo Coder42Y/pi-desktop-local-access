@@ -794,7 +794,6 @@ export class AgentHost {
     if (response.decision === "allow-session" && !this.allowRemoteSessionGrants && !principal.pairedDevice && !pairedOwnerFilesystemGrant) {
       throw racpError("FORBIDDEN", "remote session grants are not allowed by Host policy");
     }
-    }
     const result = await this.approvals.resolve(response, principal, state.revision + 1);
     if (!result.alreadyResolved) {
       this.afterApproval(state, request?.turnId);
