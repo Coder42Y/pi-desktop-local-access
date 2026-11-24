@@ -150,7 +150,6 @@ export function rememberComposerInput(
     fileReferences: snapshot.fileReferences.map((reference) => ({ ...reference })),
     ...(snapshot.quotes?.length ? { quotes: [...snapshot.quotes] } : {}),
   };
-  };
   const buckets = readBuckets();
   const current = buckets.find((bucket) => bucket.sessionId === sessionId);
   if (current?.entries[0] && sameContent(current.entries[0], entry)) {

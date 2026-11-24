@@ -53,6 +53,7 @@ export function useOpenPreviewTarget() {
       openHttpUrl(target.url);
     },
     [filePreviewsAllowed, localToolsAllowed, openFileRef],
+  );
 }
 
 /** Dot-relative references resolve against the markdown file being viewed. */
@@ -189,7 +190,6 @@ function useResolveChatFileRef() {
       if (!raw) return null;
       const anchored = isDotRelative(raw)
         ? toWorkspaceRel(raw, isRemoteSession(session) ? null : workspacePath, baseDir)
-        : null;
         : null;
       let result;
       try {

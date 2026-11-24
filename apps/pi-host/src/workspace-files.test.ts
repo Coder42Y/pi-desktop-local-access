@@ -58,4 +58,3 @@ describe("sessionless SSH file views", () => {
     await writeFile(join(path, "AGENTS.md"), "contained");
     expect(await createWorkspaceFiles().read({ path, operation: "instructions" })).toEqual({ entries: [{ source: "AGENTS.md", content: "contained" }] });
   });
-});
