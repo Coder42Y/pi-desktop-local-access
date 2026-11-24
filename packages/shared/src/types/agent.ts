@@ -167,7 +167,6 @@ export type ToolPermissionRequest = {
   risk: Risk;
   reason: string;
   externalAccess?: ExternalFilesystemAccess;
-  externalAccess?: import("./permissions.js").ExternalFilesystemAccess;
   /** Subagent that asked, when the call came from a delegate (ADR 0062). */
   agentName?: string;
   /** `Task` call that spawned the asking delegate. */
